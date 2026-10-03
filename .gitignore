@@ -1,0 +1,16 @@
+# 临时产物
+tools/shots/
+tools/.cache/
+
+# 系统 / 编辑器
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# 编辑器配置
+.vscode/
+.idea/
+
+# 备份文件
+*.bak
+*~

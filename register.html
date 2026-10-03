@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>注册 · 国防技校同学录</title>
+<link rel="icon" href="assets/img/favicon.svg">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body data-page="register">
+
+<div id="siteHeader"></div>
+
+<div class="page-head">
+  <div class="wrap">
+    <div class="crumb"><a href="index.html">首页</a> / 注册</div>
+    <h1>注册加入</h1>
+    <div class="sub">填写姓名、届别、班级即可　·　手机号等个人信息全部选填</div>
+  </div>
+</div>
+
+<section class="section">
+  <div class="wrap auth-wrap">
+    <div class="auth-card">
+      <h2>同学注册</h2>
+      <div class="auth-sub">带 <span style="color:var(--danger)">*</span> 的为必填项</div>
+
+      <form id="regForm">
+        <div class="form-row">
+          <label>姓名 <span class="req">*</span></label>
+          <input class="input" name="name" maxlength="20" placeholder="请填写真实姓名，便于同学找到你">
+        </div>
+
+        <div class="grid grid-2" style="gap:12px">
+          <div class="form-row mb0">
+            <label>届别（入学年份） <span class="req">*</span></label>
+            <input class="input" name="enroll" maxlength="10" placeholder="例如 1992">
+          </div>
+          <div class="form-row mb0">
+            <label>班级 <span class="req">*</span></label>
+            <input class="input" name="cls" maxlength="20" placeholder="例如 钳工七班">
+          </div>
+        </div>
+
+        <div class="form-row" style="margin-top:16px">
+          <label>当年来自哪里（选填）</label>
+          <input class="input" name="origin" maxlength="20" placeholder="例如 昆明 / 楚雄 / 大理">
+        </div>
+
+        <div class="form-row">
+          <label>账号 <span class="req">*</span></label>
+          <input class="input" name="user" maxlength="24" autocomplete="username"
+            placeholder="字母或数字，用于登录，例如 lihaifeng">
+        </div>
+
+        <div class="grid grid-2" style="gap:12px">
+          <div class="form-row mb0">
+            <label>密码 <span class="req">*</span></label>
+            <input class="input" type="password" name="pass" autocomplete="new-password" placeholder="至少 6 位">
+          </div>
+          <div class="form-row mb0">
+            <label>确认密码 <span class="req">*</span></label>
+            <input class="input" type="password" name="pass2" autocomplete="new-password" placeholder="再输一次">
+          </div>
+        </div>
+
+        <div class="form-row" style="margin-top:20px">
+          <label class="check">
+            <input type="checkbox" name="agree">
+            <span>我已阅读并同意本站的<a href="about.html#privacy" target="_blank">隐私约定</a>与
+              <a href="about.html#disclaimer" target="_blank">免责声明</a>，
+              理解本站为校友民间自建、非学校官方网站，我填写的联系方式默认不会公开。</span>
+          </label>
+        </div>
+
+        <button class="btn btn-block" type="submit">注 册</button>
+      </form>
+
+      <div class="auth-foot">已经有账号？<a href="login.html">去登录</a></div>
+    </div>
+
+    <div class="notice" style="margin-top:22px">
+      <strong>注册之后做什么？</strong><br>
+      1. 到<a href="roster.html">同窗名录</a>找到自己的名字，点"这是我，认领"；<br>
+      2. 到<a href="profile.html">我的资料</a>填写近况和联系方式，并自行决定是否公开；<br>
+      3. 到<a href="album.html">岁月相册</a>上传旧照片，或到<a href="messages.html">留言板</a>写两句。
+    </div>
+  </div>
+</section>
+
+<div id="siteFooter"></div>
+<div id="toast"></div>
+
+<script src="js/seed.js"></script>
+<script src="js/store.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/pages.js"></script>
+</body>
+</html>

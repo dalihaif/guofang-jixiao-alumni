@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>同窗名录 · 国防技校同学录</title>
+<meta name="description" content="按届别、班级检索国防技校钳工七班的同学与师长。手机号、地址默认隐藏，需本人确认后才展示。">
+<link rel="icon" href="assets/img/favicon.svg">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body data-page="roster">
+
+<div id="siteHeader"></div>
+
+<div class="page-head">
+  <div class="wrap">
+    <div class="crumb"><a href="index.html">首页</a> / 同窗名录</div>
+    <h1>同窗名录</h1>
+    <div class="sub">按届别、班级检索同学与师长　·　手机号与地址默认隐藏，需本人确认才展示</div>
+  </div>
+</div>
+
+<section class="section">
+  <div class="wrap">
+
+    <!-- 检索工具条 -->
+    <div class="roster-tools">
+      <div class="search-line">
+        <input class="input" id="fKw" type="search" placeholder="输入姓名 / 绰号 / 籍贯，快速找到他">
+        <a class="btn btn-ghost" href="register.html">注册加入</a>
+      </div>
+      <div class="filters">
+        <div class="filter-group" id="fEnroll"></div>
+        <div class="filter-group" id="fClass"></div>
+        <div class="filter-group" id="fRole"></div>
+      </div>
+    </div>
+
+    <div id="rosterCount" style="font-size:13.5px;color:var(--ink-2);margin-bottom:14px"></div>
+
+    <!-- 尊师名录（有师长时自动显示） -->
+    <div id="teacherList" class="grid grid-3 hide"></div>
+    <div id="teacherSpacer" style="height:6px"></div>
+
+    <!-- 同学卡片 -->
+    <div id="rosterList" class="grid grid-3"></div>
+
+    <!-- 分页 -->
+    <div class="pager" id="rosterPager"></div>
+
+    <!-- 隐私说明 -->
+    <div class="notice" style="margin-top:34px">
+      <strong>关于隐私保护：</strong>
+      名录中<strong>不自动展示任何人的手机号与地址</strong>。同学本人登录后在"我的资料"里填写并勾选
+      "同意展示"后，他的卡片上才会出现联系方式；没有勾选的一律显示为"联系方式未公开"。
+      如本人之后取消勾选，信息会立即从名录中消失。<br>
+      <strong>想认领自己的名字？</strong>注册登录后，在自己的卡片右下角点"这是我，认领"，即可填写近况与联系方式。
+    </div>
+  </div>
+</section>
+
+<div id="siteFooter"></div>
+<div id="toast"></div>
+
+<script src="js/seed.js"></script>
+<script src="js/store.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/pages.js"></script>
+</body>
+</html>

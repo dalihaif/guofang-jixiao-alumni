@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>岁月相册 · 国防技校同学录</title>
+<meta name="description" content="国防技校钳工七班岁月相册：班级相册、校园老照片、集体合影，支持上传与预览。">
+<link rel="icon" href="assets/img/favicon.svg">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body data-page="album">
+
+<div id="siteHeader"></div>
+
+<div class="page-head">
+  <div class="wrap">
+    <div class="crumb"><a href="index.html">首页</a> / 岁月相册</div>
+    <h1>岁月相册</h1>
+    <div class="sub">班级相册　·　校园老照片　·　集体合影　·　近年重聚　　点击图片可放大查看</div>
+  </div>
+</div>
+
+<section class="section">
+  <div class="wrap">
+    <div class="album-filter" id="albumTabs"></div>
+    <div class="gallery" id="gallery"></div>
+
+    <div class="notice" style="margin-top:30px">
+      <strong>照片说明：</strong>本站照片均来自同学们自己保存的旧照与聚会留影，仅供同学之间互相观看、回忆。
+      请勿下载后用于商业用途或发布到其他公开平台。<br>
+      如某张照片涉及你本人而不希望被展示，请联系管理员删除，我们会立即处理。
+    </div>
+  </div>
+</section>
+
+<!-- ==================== 上传区 ==================== -->
+<section class="section">
+  <div class="wrap wrap-narrow">
+    <div class="section-head">
+      <h2>我也要上传照片</h2>
+      <div class="desc">把抽屉里、手机里的老照片翻出来吧。提交后由管理员审核，通过后即会展示在相册中。</div>
+    </div>
+
+    <div class="notice notice-warn" id="upNeedLogin" style="margin-bottom:18px">
+      上传照片需要先<a href="login.html">登录</a>或<a href="register.html">注册</a>。
+      注册只需填写姓名、届别、班级，手机号等个人信息不必填。
+    </div>
+
+    <form id="uploadForm" class="card card-pad">
+      <div class="uploader" id="dropZone">
+        <div class="up-icon">⬆</div>
+        <div class="up-t">把照片拖到这里，或点击下面的按钮选择</div>
+        <div class="up-s">支持 JPG / PNG，一次最多 6 张，系统会自动压缩后保存</div>
+        <div style="margin-top:16px">
+          <label class="btn" for="upFile">选择照片</label>
+          <input id="upFile" type="file" accept="image/*" multiple style="display:none">
+        </div>
+        <div class="preview-strip" id="upPreview"></div>
+      </div>
+
+      <div style="height:22px"></div>
+
+      <div class="grid grid-2" style="gap:16px">
+        <div class="form-row mb0">
+          <label>照片分类</label>
+          <select class="select" name="cat">
+            <option value="class">班级相册</option>
+            <option value="campus">校园老照片</option>
+            <option value="group">集体合影</option>
+            <option value="recent">近年重聚</option>
+          </select>
+        </div>
+        <div class="form-row mb0">
+          <label>拍摄年份（选填）</label>
+          <input class="input" name="year" maxlength="20" placeholder="例如 1994 年 或 约 1996 年">
+        </div>
+      </div>
+
+      <div class="form-row" style="margin-top:16px">
+        <label>照片标题 <span class="req">*</span></label>
+        <input class="input" name="title" maxlength="40" placeholder="例如 石林春游 · 四人合影">
+      </div>
+
+      <div class="form-row">
+        <label>照片说明（选填）</label>
+        <textarea class="textarea" name="desc" maxlength="300"
+          placeholder="当时在哪里、和谁在一起、发生了什么事……写下来，以后才不会被忘掉。"></textarea>
+        <div class="form-hint">提交后需管理员审核，审核通过后才会对外展示。你可以在下方"我上传的照片"里查看审核状态。</div>
+      </div>
+
+      <button class="btn btn-army" type="submit">提交照片（待审核）</button>
+    </form>
+
+    <div id="myUploads"></div>
+  </div>
+</section>
+
+<!-- ==================== 影音资料 ==================== -->
+<section class="section">
+  <div class="wrap">
+    <div class="section-head">
+      <h2>影音资料</h2>
+      <div class="desc">同学聚会时制作的两段影像与一首配乐。视频文件较大，需先运行一次导入脚本（见下方说明）。</div>
+    </div>
+
+    <div class="grid grid-2">
+      <div>
+        <div class="video-box">
+          <video id="v1" controls preload="metadata" poster="assets/photos/gather-2025.jpg"></video>
+          <div class="video-fallback" id="v1tip"></div>
+        </div>
+        <div style="font-size:14px;color:var(--navy-800);font-weight:600;margin-top:10px">《国防钳七》纪念影像</div>
+      </div>
+      <div>
+        <div class="video-box">
+          <video id="v2" controls preload="metadata" poster="assets/photos/feast-2023.jpg"></video>
+          <div class="video-fallback" id="v2tip"></div>
+        </div>
+        <div style="font-size:14px;color:var(--navy-800);font-weight:600;margin-top:10px">《同学》聚会影像</div>
+      </div>
+    </div>
+
+    <div class="card card-pad" style="margin-top:22px">
+      <div style="font-size:14.5px;font-weight:600;color:var(--navy-800);margin-bottom:10px">配乐 · 当年的歌</div>
+      <audio controls preload="none" src="assets/media/music.mp3" style="width:100%"></audio>
+      <div class="form-hint">
+        素材来源：同学聚会影像《国防钳七》《同学》。如需更换配乐，把 MP3 放到
+        <code>assets/media/</code> 覆盖同名文件即可。
+      </div>
+    </div>
+
+    <div class="notice notice-navy" style="margin-top:18px">
+      <strong>视频看不到？</strong>两个视频共约 900 MB，未随网站一起打包。请到网站根目录双击运行
+      <code>导入视频素材.bat</code>（Windows）或 <code>导入视频素材.sh</code>（macOS / Linux），
+      脚本会把上级文件夹里的 <code>国防钳七.mp4</code> 与 <code>同学.mp4</code> 复制到
+      <code>assets/media/</code> 下，刷新页面即可播放。
+    </div>
+  </div>
+</section>
+
+<div id="siteFooter"></div>
+<div id="toast"></div>
+
+<script src="js/seed.js"></script>
+<script src="js/store.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/pages.js"></script>
+<script>
+/* 视频路径探测：先试 assets/media/，找不到就给出提示 + 一键切换到上级目录
+   （只发 1 次请求，避免页面出现大量 404 记录） */
+(function () {
+  var list = [
+    { id: 'v1', name: 'guofang-qianqi.mp4', fallback: '国防钳七.mp4', tip: 'v1tip' },
+    { id: 'v2', name: 'tongxue.mp4',        fallback: '同学.mp4',     tip: 'v2tip' }
+  ];
+  list.forEach(function (it) {
+    var v = document.getElementById(it.id);
+    var tip = document.getElementById(it.tip);
+    v.addEventListener('error', function () {
+      tip.innerHTML =
+        '未找到视频文件 <code>assets/media/' + it.name + '</code>。<br>' +
+        '请运行网站根目录的 <code>导入视频素材.bat</code>，或手动把 <code>' + it.fallback +
+        '</code> 复制到 <code>assets/media/' + it.name + '</code>。<br>' +
+        '<button type="button" class="btn btn-light btn-sm" style="margin-top:8px" data-try="1">' +
+        '先试着从上级文件夹读取</button>';
+      var b = tip.querySelector('[data-try]');
+      if (b) b.onclick = function () {
+        v.src = '../' + it.fallback;
+        v.load();
+      };
+    });
+    v.addEventListener('loadedmetadata', function () {
+      tip.innerHTML = '片源：<code>' + (v.currentSrc || '').split('/').pop() + '</code>　·　时长 ' +
+        Math.round(v.duration) + ' 秒';
+    });
+    v.src = 'assets/media/' + it.name;
+  });
+})();
+</script>
+</body>
+</html>

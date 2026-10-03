@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>国防技校同学录 · 云南省国防技校钳工七班（1992—1995）</title>
+<meta name="description" content="云南省国防技校钳工七班同学录：同窗名录、岁月相册、留言寄语、校园往事。面向往届在校学员，用于同学联络与旧照留存。">
+<meta name="keywords" content="国防技校,同学录,钳工七班,校友,老照片,云南,呈贡,王家营">
+<link rel="icon" href="assets/img/favicon.svg">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body data-page="home">
+
+<!-- 页头（由 js/ui.js 自动生成，改菜单请见该文件顶部 NAV 数组） -->
+<div id="siteHeader"></div>
+
+<!-- ==================== 开篇寄语横幅 ==================== -->
+<section class="hero">
+  <div class="hero-inner">
+    <div class="eyebrow">云南省国防技校 · 钳工七班 · 1992 — 1995</div>
+    <h1>国防技校同学录</h1>
+    <div class="en">Alumni of Yunnan National Defense Technical School</div>
+    <div class="slogan">
+      一九九二年秋，我们自全省各地来到呈贡王家营，在红砖青瓦的校园里相识。<br>
+      三年光阴，梧桐叶落又生；如今再聚，少年都已两鬓微霜。<br>
+      谨以此站，留存旧照、收录寄语、续写同窗之谊。
+    </div>
+    <div class="hero-stat" data-home="stats"></div>
+  </div>
+</section>
+
+<!-- ==================== 老照片轮播 ==================== -->
+<section class="section">
+  <div class="wrap">
+    <div class="section-head">
+      <h2>旧影留存</h2>
+      <a class="more" href="album.html">进入岁月相册 →</a>
+      <div class="desc">翻一翻泛黄的照片，看看当年的自己和身边的同学。</div>
+    </div>
+    <div class="carousel" id="carousel">
+      <div class="carousel-stage" id="carouselStage"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== 留言滚动 + 快捷入口 ==================== -->
+<section class="section">
+  <div class="wrap">
+    <div class="grid grid-2">
+      <!-- 最新留言 -->
+      <div>
+        <div class="section-head">
+          <h2>同窗寄语</h2>
+          <a class="more" href="messages.html">全部留言 →</a>
+          <div class="desc">同学们写下的近况与回忆（鼠标移上去可暂停滚动）。</div>
+        </div>
+        <div class="msg-roll" id="msgRoll"></div>
+        <div style="margin-top:14px">
+          <a class="btn btn-army" href="messages.html">我要留言</a>
+        </div>
+      </div>
+
+      <!-- 快捷入口 -->
+      <div>
+        <div class="section-head">
+          <h2>从这里开始</h2>
+          <div class="desc">第一次来？按下面几步就能找到自己和老同学。</div>
+        </div>
+        <div class="grid grid-2" style="gap:12px">
+          <a class="card card-pad" href="roster.html" style="text-decoration:none">
+            <div style="font-size:19px;color:var(--navy-800);font-weight:600">同窗名录</div>
+            <div style="font-size:13px;color:var(--ink-2);margin-top:6px;line-height:1.7">
+              按届别、班级检索同学，认领自己的名字，留下近况。
+            </div>
+          </a>
+          <a class="card card-pad" href="album.html" style="text-decoration:none">
+            <div style="font-size:19px;color:var(--navy-800);font-weight:600">岁月相册</div>
+            <div style="font-size:13px;color:var(--ink-2);margin-top:6px;line-height:1.7">
+              班级相册、校园老照片、集体合影，也可以上传自己的照片。
+            </div>
+          </a>
+          <a class="card card-pad" href="stories.html" style="text-decoration:none">
+            <div style="font-size:19px;color:var(--navy-800);font-weight:600">校园往事</div>
+            <div style="font-size:13px;color:var(--ink-2);margin-top:6px;line-height:1.7">
+              《国防技校的日子》全文，以及班里的大事记。
+            </div>
+          </a>
+          <a class="card card-pad" href="register.html" style="text-decoration:none">
+            <div style="font-size:19px;color:var(--navy-800);font-weight:600">注册加入</div>
+            <div style="font-size:13px;color:var(--ink-2);margin-top:6px;line-height:1.7">
+              填写届别班级即可注册。手机号、地址默认不公开。
+            </div>
+          </a>
+        </div>
+        <div class="notice" style="margin-top:16px">
+          <strong>请先看这里：</strong>本网站为校友民间自建，非学校官方网站。
+          你的手机号、地址<strong>默认不对外展示</strong>，只有本人在"我的资料"里主动开启后才会显示。
+          留言与照片提交后需管理员审核，通过后才会对外展示。
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== 大事记摘要 ==================== -->
+<section class="section">
+  <div class="wrap wrap-narrow">
+    <div class="section-head">
+      <h2>岁月长河 · 大事记</h2>
+      <a class="more" href="stories.html">完整大事记 →</a>
+      <div class="desc">从一九九二年那个秋天说起。</div>
+    </div>
+    <div class="card card-pad">
+      <div class="timeline" id="timeline"></div>
+    </div>
+  </div>
+</section>
+
+<!-- 页脚 -->
+<div id="siteFooter"></div>
+<div id="toast"></div>
+
+<script src="js/seed.js"></script>
+<script src="js/store.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/pages.js"></script>
+<script>
+/* 首页底部也渲染一遍大事记（复用 pages.js 里 stories 的渲染逻辑） */
+(function () {
+  var tl = document.getElementById('timeline');
+  if (!tl) return;
+  tl.innerHTML = window.SEED_TIMELINE.map(function (t) {
+    return '<div class="tl-item' + (t.key ? ' key' : '') + '">' +
+      '<div class="tl-date">' + UI.esc(t.date) + '</div>' +
+      '<div class="tl-t">' + UI.esc(t.title) + '</div>' +
+      '<div class="tl-d">' + UI.esc(t.desc) + '</div></div>';
+  }).join('');
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>登录 · 国防技校同学录</title>
+<link rel="icon" href="assets/img/favicon.svg">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body data-page="login">
+
+<div id="siteHeader"></div>
+
+<div class="page-head">
+  <div class="wrap">
+    <div class="crumb"><a href="index.html">首页</a> / 登录</div>
+    <h1>登录</h1>
+    <div class="sub">登录后可认领自己的名录、留言、上传照片</div>
+  </div>
+</div>
+
+<section class="section">
+  <div class="wrap auth-wrap">
+    <div class="auth-card" id="loginBox">
+      <h2>同学登录</h2>
+      <div class="auth-sub">欢迎回来，请使用注册时的账号登录</div>
+      <form id="loginForm">
+        <div class="form-row">
+          <label>账号</label>
+          <input class="input" name="user" autocomplete="username" placeholder="注册时填写的账号">
+        </div>
+        <div class="form-row">
+          <label>密码</label>
+          <input class="input" type="password" name="pass" autocomplete="current-password" placeholder="登录密码">
+        </div>
+        <button class="btn btn-block" type="submit">登 录</button>
+      </form>
+      <div class="auth-foot">还没有账号？<a href="register.html">立即注册</a></div>
+      <div class="demo-hint">
+        <strong>管理员演示账号：</strong>账号 <code>admin</code>　密码 <code>admin888</code><br>
+        登录后可进入"管理后台"审核留言与照片。<strong>正式使用时请务必先修改这个密码。</strong>
+      </div>
+    </div>
+
+    <div class="notice" style="margin-top:22px">
+      <strong>隐私提示：</strong>本站不收集手机号、身份证等敏感信息，注册只需姓名、届别、班级。
+      登录状态仅保存在您自己的浏览器中。
+    </div>
+  </div>
+</section>
+
+<div id="siteFooter"></div>
+<div id="toast"></div>
+
+<script src="js/seed.js"></script>
+<script src="js/store.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/pages.js"></script>
+</body>
+</html>

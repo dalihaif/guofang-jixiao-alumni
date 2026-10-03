@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>留言板 · 国防技校同学录</title>
+<meta name="description" content="国防技校钳工七班同学留言板：在线留言、回忆随笔，支持回复。所有留言经管理员审核后展示。">
+<link rel="icon" href="assets/img/favicon.svg">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body data-page="messages">
+
+<div id="siteHeader"></div>
+
+<div class="page-head">
+  <div class="wrap">
+    <div class="crumb"><a href="index.html">首页</a> / 留言板</div>
+    <h1>留言板</h1>
+    <div class="sub">同窗寄语　·　回忆随笔　　所有留言经管理员审核后展示</div>
+  </div>
+</div>
+
+<section class="section">
+  <div class="wrap wrap-narrow">
+
+    <!-- 发布留言 -->
+    <div class="section-head">
+      <h2>写一段话给老同学</h2>
+      <div class="desc">可以是近况、可以是回忆，也可以只是说一句"好久不见"。</div>
+    </div>
+
+    <div class="notice notice-warn" id="msgNeedLogin" style="margin-bottom:18px">
+      发布留言与回复需要先<a href="login.html">登录</a>或<a href="register.html">注册</a>。
+      注册需填写届别与班级，手机号等个人信息不必填。
+    </div>
+
+    <div id="toTip" class="notice hide" style="margin-bottom:14px"></div>
+
+    <form id="msgForm" class="card card-pad">
+      <div class="form-row">
+        <label>留言人</label>
+        <input class="input" name="author" readonly style="background:var(--bg-2)">
+      </div>
+      <div class="form-row mb0">
+        <label>留言内容 <span class="req">*</span></label>
+        <textarea class="textarea" name="text" maxlength="1200"
+          placeholder="写下你的回忆、近况或想对老同学说的话……（提交后需管理员审核）"></textarea>
+        <div class="form-hint">
+          最多 1200 字。请勿在留言中填写他人的手机号、住址等个人信息；也请不要发布涉密、涉军等敏感内容。
+        </div>
+      </div>
+      <div style="margin-top:16px">
+        <button class="btn btn-army" type="submit">提交留言（待审核）</button>
+        <a class="btn btn-ghost" href="messages.html?mine=1">查看我的留言</a>
+        <a class="btn btn-ghost" href="messages.html">看全部留言</a>
+      </div>
+    </form>
+
+    <div style="height:34px"></div>
+
+    <!-- 留言列表 -->
+    <div class="section-head">
+      <h2 id="listTitle">全部留言</h2>
+      <div class="desc">点击"回复"可以直接回应某位同学。</div>
+    </div>
+    <div id="msgList"></div>
+
+    <div class="notice" style="margin-top:30px">
+      <strong>留言需审核：</strong>新留言与回复提交后先进入"待审核"状态，管理员点"通过"后才会出现在这里的公开列表中。
+      管理员可删除含有不当内容的留言。<br>
+      <strong>关于保密：</strong>本站为校友民间自建。请勿发布部队番号、涉密信息、不当标语等内容，
+      共同维护这个来之不易的小站。
+    </div>
+  </div>
+</section>
+
+<div id="siteFooter"></div>
+<div id="toast"></div>
+
+<script src="js/seed.js"></script>
+<script src="js/store.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/pages.js"></script>
+</body>
+</html>
