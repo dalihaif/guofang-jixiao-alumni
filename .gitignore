@@ -1,6 +1,8 @@
 # 临时产物
 tools/shots/
 tools/.cache/
+tools/live.png
+tmp/
 
 # 后端运行时数据（数据库 + 上传的照片，属于"站内数据"，不进代码仓库）
 server/data/

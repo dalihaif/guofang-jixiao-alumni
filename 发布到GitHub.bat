@@ -3,8 +3,9 @@ chcp 65001 >nul
 rem ===================================================================
 rem  国防技校同学录 · 一键发布到 GitHub Pages
 rem  用法：
-rem    方式一（双击运行，会提示输入令牌）：直接双击本文件
-rem    方式二（命令行）：发布到GitHub.bat ghp_你的令牌
+rem    0. 先提交改动：git add -A  &&  git commit -m "说明"
+rem    1. 双击运行（会提示输入令牌），或命令行：发布到GitHub.bat ghp_你的令牌
+rem    2. 若 git push 被代理掐断，脚本会自动改用 GitHub API 提交（只需本地已 commit）
 rem
 rem  令牌获取： https://github.com/settings/tokens
 rem            → Generate new token (classic) → 勾选 repo → 生成
@@ -53,6 +54,12 @@ if errorlevel 1 (
 echo.
 echo   [3/5] 推送代码...
 git push -u origin main
+if errorlevel 1 (
+  echo.
+  echo   git 推送被网络/代理掐断，改用 GitHub API 提交（tools\apipush_tree.py）...
+  echo   注意：API 方式提交的是"已 commit 的改动"，请先 git add -A ^&^& git commit -m "说明"
+  python tools\apipush_tree.py HEAD~1 "chore: 通过 API 同步站点改动"
+)
 
 echo.
 echo   [4/5] 开启 GitHub Pages（分支 main / 根目录）...
