@@ -5,7 +5,9 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>关于本站 · 国防技校同学录</title>
 <meta name="description" content="建站初衷、隐私约定、免责声明与使用帮助。本站为校友民间自建，非学校官方网站。">
-<link rel="icon" href="assets/img/favicon.svg">
+<link rel="icon" href="assets/img/favicon.ico" sizes="any">
+<link rel="icon" type="image/png" href="assets/img/logo-128.png" sizes="128x128">
+<link rel="apple-touch-icon" href="assets/img/apple-touch-icon.png">
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body data-page="about">
@@ -22,6 +24,15 @@
 
 <section class="section">
   <div class="wrap wrap-narrow">
+
+    <div class="about-brand">
+      <img src="assets/img/logo-256.png" width="120" height="120" alt="云南省国防技校钳工七班班徽">
+      <div class="about-brand-txt">
+        <div class="abt">国防钳七</div>
+        <div class="abs">云南省国防技校 · 钳工七班 · 1992—1995</div>
+        <div class="abs motto">友谊长存</div>
+      </div>
+    </div>
 
     <div class="card card-pad">
       <div class="prose-block">
@@ -57,9 +68,11 @@
           <li><strong>内容审核</strong>——留言、照片提交后都要经过管理员审核才会对外展示，可随时删除。</li>
           <li><strong>数据存在本地</strong>——本站为轻量版，数据保存在各自浏览器的本地存储中，
             不上传到任何服务器，也不做任何统计分析、不投放广告、不向第三方提供数据。</li>
-          <li><strong>线上版的边界</strong>——正因为数据只存在本地，
-            在线上访问时，同学新写的留言、新传的照片<strong>保存在他自己的浏览器里，其他同学看不到</strong>。
-            名录、文章、相册等初始内容则是所有人共享的。若需要"留言大家都能看到"，需要给网站接一个后端。</li>
+          <li><strong>两种运行方式</strong>——本站在<strong>纯静态方式</strong>下访问时（如线上公开版），
+            数据只存在本地，同学新写的留言、新传的照片<strong>保存在他自己的浏览器里，其他同学看不到</strong>。
+            若由管理员启动后端服务（<code>python server/app.py</code>）再访问，
+            数据会统一存入服务器数据库，所有同学共享同一份，隐私规则完全一致。
+            网站会自动识别当前是哪种方式，无需任何设置。</li>
           <li><strong>随时可删除</strong>——本人要求删除自己的任何内容或联系方式，联系管理员即可立即处理。</li>
         </ul>
         <div class="notice notice-warn" style="margin-top:14px">

@@ -102,7 +102,9 @@
       '<header class="site-header">' +
         '<div class="header-inner">' +
           '<a class="brand" href="index.html">' +
-            '<span class="brand-mark">国防</span>' +
+            '<img class="brand-logo" src="assets/img/logo-128.png" ' +
+              'srcset="assets/img/logo-128.png 1x, assets/img/logo-256.png 2x" ' +
+              'width="52" height="52" alt="' + esc(S.className || '国防钳七') + '班徽">' +
             '<span class="brand-text">' +
               '<span class="brand-title">' + esc(S.name || '同学录') + '</span><br>' +
               '<span class="brand-sub">' + esc(S.school || '') + ' · ' + esc(S.years || '') + '</span>' +
@@ -122,6 +124,8 @@
         '<div class="wrap">' +
           '<div class="footer-top">' +
             '<div class="footer-brand">' +
+              '<img class="footer-logo" src="assets/img/logo-128.png" width="56" height="56" ' +
+                'alt="' + esc(S.className || '国防钳七') + '班徽">' +
               '<div class="bt">' + esc(S.name || '同学录') + '</div>' +
               '<div class="bs">' + esc(S.school || '') + ' · ' + esc(S.className || '') +
                 '（' + esc(S.years || '') + '）</div>' +
@@ -239,6 +243,9 @@
     if (window.PAGES && PAGES[page]) {
       try { PAGES[page](); } catch (err) { console.error(err); }
     }
+
+    // 各页面的事件到这里才绑完，放开提交按钮（在这之前 CSS 会先禁用，防止"点太快没反应"）
+    document.body.classList.add('ready');
   }
 
   window.UI = {
@@ -247,11 +254,13 @@
     lightbox: LB, catName: Photos_catName, NAV: NAV
   };
 
-  /* Store 需先初始化，再渲染界面 */
-  if (window.Store && !window.Store.read(window.Store.KEY.inited, false)) {
-    window.Store.init();
+  /* 先探测后端（有则同步数据），再渲染界面 */
+  function go() {
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
+    else boot();
   }
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', boot);
-  } else { boot(); }
+  if (window.Store) {
+    var r = window.Store.start();
+    if (r && typeof r.then === 'function') r.then(go, go); else go();
+  } else { go(); }
 })();

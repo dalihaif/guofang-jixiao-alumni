@@ -265,9 +265,11 @@
       var u = St.Auth.cur();
       if (!u) { U.toast('请先登录后再认领'); setTimeout(function () { location.href = 'login.html'; }, 700); return; }
       if (!confirm('确认认领这条名录？\n认领后你可以在"我的资料"里填写联系方式，并自行决定是否公开展示。\n（一个账号只能认领一位同学，你的手机号、地址默认不公开）')) return;
-      St.Members.claim(b.getAttribute('data-claim'), u.id);
-      U.toast('认领成功，请到"我的资料"完善信息');
-      render();
+      St.Members.claim(b.getAttribute('data-claim'), u.id).then(function (r) {
+        if (!r.ok) { U.toast(r.msg || '认领失败'); return; }
+        U.toast('认领成功，请到"我的资料"完善信息');
+        render();
+      });
     });
   };
 
@@ -373,19 +375,26 @@
       var bad = St.checkWords(title + desc);
       if (bad) { U.toast('说明文字含不适宜词语「' + bad + '」，请修改'); return; }
 
-      chosen.forEach(function (c, i) {
-        St.Photos.add({
+      var btn = form.querySelector('button[type=submit]');
+      btn.disabled = true; btn.textContent = '上传中…';
+      var n = chosen.length;
+      var jobs = chosen.map(function (c, i) {
+        return St.Photos.add({
           cat: cat, src: c.dataUrl,
-          title: chosen.length > 1 ? (title || '未命名照片') + '（' + (i + 1) + '）' : (title || '未命名照片'),
+          title: n > 1 ? (title || '未命名照片') + '（' + (i + 1) + '）' : (title || '未命名照片'),
           year: year, desc: desc, uploader: u.name, userId: u.id
         });
       });
-      var n = chosen.length;
-      chosen = []; paintStrip(); form.reset();
-      U.toast('已提交 ' + n + ' 张照片，等待管理员审核后对外展示', 3200);
-      var my = document.getElementById('myUploads');
-      if (my) { my.classList.remove('hide'); renderMine(); }
-      renderTabs(); render();
+      Promise.all(jobs).then(function (rs) {
+        btn.disabled = false; btn.textContent = '提交照片（待审核）';
+        var fail = rs.filter(function (r) { return !r.ok; }).length;
+        if (fail) { U.toast('有 ' + fail + ' 张上传失败，请重试'); }
+        else { U.toast('已提交 ' + n + ' 张照片，等待管理员审核后对外展示', 3200); }
+        chosen = []; paintStrip(); form.reset();
+        var my = document.getElementById('myUploads');
+        if (my) { my.classList.remove('hide'); renderMine(); }
+        renderTabs(); render();
+      });
     });
 
     /* 我上传的（含待审核） */
@@ -409,8 +418,9 @@
       var b = e.target.closest ? e.target.closest('[data-del]') : null;
       if (!b) return;
       if (!confirm('确定删除这张照片吗？')) return;
-      St.Photos.remove(b.getAttribute('data-del'));
-      U.toast('已删除'); renderMine(); renderTabs(); render();
+      St.Photos.remove(b.getAttribute('data-del')).then(function () {
+        U.toast('已删除'); renderMine(); renderTabs(); render();
+      });
     });
   };
 
@@ -445,13 +455,17 @@
       }
       form.addEventListener('submit', function (e) {
         e.preventDefault();
+        var btn = form.querySelector('button[type=submit]');
         var text = form.querySelector('[name=text]').value;
         if (toName && text.indexOf('@' + toName) < 0) text = '@' + toName + '：' + text;
-        var r = St.Msgs.add({ author: u.name, cls: u.cls, userId: u.id, text: text });
-        if (!r.ok) { U.toast(r.msg); return; }
-        form.reset(); form.querySelector('[name=author]').value = u.name;
-        U.toast('留言已提交，管理员审核通过后即会展示');
-        render();
+        btn.disabled = true; btn.textContent = '提交中…';
+        St.Msgs.add({ author: u.name, cls: u.cls, userId: u.id, text: text }).then(function (r) {
+          btn.disabled = false; btn.textContent = '提交留言（待审核）';
+          if (!r.ok) { U.toast(r.msg); return; }
+          form.reset(); form.querySelector('[name=author]').value = u.name;
+          U.toast('留言已提交，管理员审核通过后即会展示');
+          render();
+        });
       });
     }
 
@@ -521,18 +535,19 @@
         return;
       }
       var ok = t.closest('[data-mok]'), no = t.closest('[data-mno]'), del = t.closest('[data-mdel]');
-      if (ok) { St.Msgs.setStatus(ok.getAttribute('data-mok'), 'approved'); U.toast('已通过'); render(); return; }
-      if (no) { St.Msgs.setStatus(no.getAttribute('data-mno'), 'rejected'); U.toast('已驳回'); render(); return; }
+      if (ok) { St.Msgs.setStatus(ok.getAttribute('data-mok'), 'approved').then(function () { U.toast('已通过'); render(); }); return; }
+      if (no) { St.Msgs.setStatus(no.getAttribute('data-mno'), 'rejected').then(function () { U.toast('已驳回'); render(); }); return; }
       if (del) {
         if (!confirm('确定删除这条留言？删除后不可恢复。')) return;
-        St.Msgs.remove(del.getAttribute('data-mdel')); U.toast('已删除'); render(); return;
+        St.Msgs.remove(del.getAttribute('data-mdel')).then(function () { U.toast('已删除'); render(); });
+        return;
       }
       var rd = t.closest('[data-rdel]');
       if (rd) {
         var post = t.closest('.post');
         if (!confirm('删除这条回复？')) return;
-        St.Msgs.removeReply(post.getAttribute('data-id'), rd.getAttribute('data-rdel'));
-        U.toast('已删除'); render();
+        St.Msgs.removeReply(post.getAttribute('data-id'), rd.getAttribute('data-rdel'))
+          .then(function () { U.toast('已删除'); render(); });
       }
     });
     listBox.addEventListener('submit', function (e) {
@@ -540,9 +555,13 @@
       e.preventDefault();
       var uu = St.Auth.cur();
       if (!uu) { U.toast('请先登录后再回复'); setTimeout(function () { location.href = 'login.html'; }, 700); return; }
-      var r = St.Msgs.reply(f.getAttribute('data-rform'), { author: uu.name, text: f.querySelector('input').value });
-      if (!r.ok) { U.toast(r.msg); return; }
-      U.toast('回复已发布'); render();
+      var inp = f.querySelector('input');
+      St.Msgs.reply(f.getAttribute('data-rform'), { author: uu.name, text: inp.value })
+        .then(function (r) {
+          if (!r.ok) { U.toast(r.msg); return; }
+          inp.value = '';
+          U.toast('回复已发布'); render();
+        });
     });
   };
 
@@ -650,13 +669,17 @@
     }
     f.addEventListener('submit', function (e) {
       e.preventDefault();
-      var r = St.Auth.login(
+      var btn = f.querySelector('button[type=submit]');
+      btn.disabled = true; btn.textContent = '登录中…';
+      St.Auth.login(
         f.querySelector('[name=user]').value.trim(),
         f.querySelector('[name=pass]').value
-      );
-      if (!r.ok) { U.toast(r.msg); return; }
-      U.toast('登录成功，欢迎回来');
-      setTimeout(function () { location.href = r.user.role === 'admin' ? 'admin.html' : 'index.html'; }, 600);
+      ).then(function (r) {
+        btn.disabled = false; btn.textContent = '登 录';
+        if (!r.ok) { U.toast(r.msg); return; }
+        U.toast('登录成功，欢迎回来');
+        setTimeout(function () { location.href = r.user.role === 'admin' ? 'admin.html' : 'index.html'; }, 600);
+      });
     });
   };
 
@@ -679,11 +702,14 @@
       };
       if (o.pass !== o.pass2) { U.toast('两次输入的密码不一致'); return; }
       if (!f.querySelector('[name=agree]').checked) { U.toast('请先阅读并同意隐私约定与免责声明'); return; }
-      var r = St.Auth.register(o);
-      if (!r.ok) { U.toast(r.msg); return; }
-      St.Auth.login(o.user, o.pass);
-      U.toast('注册成功，正在进入…');
-      setTimeout(function () { location.href = 'roster.html'; }, 700);
+      var btn = f.querySelector('button[type=submit]');
+      btn.disabled = true; btn.textContent = '注册中…';
+      // register 在服务器模式下会直接完成登录，无需再调一次 login
+      St.Auth.register(o).then(function (r) {
+        if (!r.ok) { btn.disabled = false; btn.textContent = '注 册'; U.toast(r.msg); return; }
+        U.toast('注册成功，正在进入…');
+        setTimeout(function () { location.href = 'roster.html'; }, 700);
+      });
     });
   };
 
@@ -764,27 +790,31 @@
         showPhone: pf.querySelector('[name=showPhone]').checked,
         showAddr: pf.querySelector('[name=showAddr]').checked
       };
-      St.Members.saveProfile(u.id, patch);
-      U.toast('已保存' + (patch.showPhone || patch.showAddr ? '（已按你的选择公开相应信息）' : '（联系方式仍为不公开）'));
+      St.Members.saveProfile(u.id, patch).then(function (r) {
+        U.toast(r.ok
+          ? '已保存' + (patch.showPhone || patch.showAddr ? '（已按你的选择公开相应信息）' : '（联系方式仍为不公开）')
+          : (r.msg || '保存失败'));
+      });
     });
     document.addEventListener('click', function (e) {
       var b = e.target.closest ? e.target.closest('[data-unclaim]') : null;
       if (!b) return;
       if (!confirm('取消认领后，名录中你的联系方式与近况将一并清除，确定吗？')) return;
-      St.Members.saveProfile(u.id, { phone: '', addr: '', showPhone: false, showAddr: false });
-      var all = St.Members.all();
-      all.forEach(function (x) { if (x.ownerId === u.id) x.ownerId = ''; });
-      St.write(St.KEY.members, all);
-      U.toast('已取消认领');
-      setTimeout(function () { location.reload(); }, 600);
+      var m = St.Members.byOwner(u.id);
+      (m ? St.Members.unclaim(m.id) : Promise.resolve({ ok: true })).then(function () {
+        U.toast('已取消认领');
+        setTimeout(function () { location.reload(); }, 600);
+      });
     });
 
     var pp = document.getElementById('passForm');
     if (pp) pp.addEventListener('submit', function (e) {
       e.preventDefault();
-      var r = St.Users.setPass(u.id, pp.querySelector('[name=oldP]').value, pp.querySelector('[name=newP]').value);
-      U.toast(r.ok ? '密码已修改，请重新登录' : r.msg);
-      if (r.ok) setTimeout(function () { St.Auth.logout(); location.href = 'login.html'; }, 1200);
+      St.Users.setPass(u.id, pp.querySelector('[name=oldP]').value, pp.querySelector('[name=newP]').value)
+        .then(function (r) {
+          U.toast(r.ok ? '密码已修改，请重新登录' : r.msg);
+          if (r.ok) setTimeout(function () { St.Auth.logout(); location.href = 'login.html'; }, 1200);
+        });
     });
   };
 
@@ -922,11 +952,17 @@
       data: function () {
         var d = new Date(), p = function (n) { return (n < 10 ? '0' : '') + n; };
         var fn = '同学录数据备份_' + d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) + '.json';
-        return '<div class="notice notice-navy">所有数据都保存在<strong>本机浏览器</strong>里，不经过任何服务器。' +
-          '建议每月导出一次备份，换电脑或清理浏览器缓存后可导入恢复。</div>' +
+        var storeTip = St.API.on
+          ? '<div class="notice notice-navy">当前为<strong>服务器模式</strong>，数据统一保存在后端数据库。' +
+            '建议每月导出一次备份；更简单的做法是<strong>直接复制 <code>server/data/alumni.db</code> 这个文件</strong>，' +
+            '它就是全部数据。</div>'
+          : '<div class="notice notice-navy">当前为<strong>本地模式</strong>，所有数据都保存在各自浏览器里。' +
+            '建议每月导出一次备份，换电脑或清理浏览器缓存后可导入恢复。</div>';
+        return storeTip +
           '<div style="height:16px"></div>' +
           '<button class="btn" data-a="export">导 出 备 份（.json）</button> ' +
-          '<button class="btn btn-ghost" data-a="import">导入备份…</button> ' +
+          (St.API.on ? '' :
+          '<button class="btn btn-ghost" data-a="import">导入备份…</button> ') +
           '<input type="file" id="impFile" accept=".json,application/json" style="display:none">' +
           '<div style="height:24px"></div>' +
           '<div class="notice notice-warn">如需彻底重来：恢复初始内容（会清空所有留言、照片和注册用户，' +
@@ -937,7 +973,15 @@
       },
       sys: function () {
         var pc = St.Photos.count();
+        var mode = St.API.on
+          ? '<span class="tag tag-ok">服务器模式</span>　数据保存在 Flask + SQLite 后端，' +
+            '所有同学共享同一份留言与照片。数据库文件：<code>server/data/alumni.db</code>'
+          : '<span class="tag tag-warn">本地模式</span>　未检测到后端，数据保存在' +
+            '<strong>各自浏览器</strong>的本地存储里，同学之间看不到彼此的新留言与新照片。' +
+            '想共享数据请运行 <code>python server/app.py</code>。';
         return '<div class="prose-block">' +
+          '<h3>运行模式</h3>' +
+          '<p class="noind">' + mode + '</p>' +
           '<h3>站点信息</h3>' +
           '<p class="noind">站点名称、开篇寄语、导航菜单等，请编辑 <code>js/seed.js</code> 顶部的 <code>window.SITE</code>；' +
           '名录、文章、相册初始内容也在同一个文件里。</p>' +
@@ -977,43 +1021,46 @@
     box.addEventListener('click', function (e) {
       var b = e.target.closest('[data-a]'); if (!b) return;
       var a = b.getAttribute('data-a'), id = b.getAttribute('data-id');
+      var isMsg = St.Msgs.all().some(function (m) { return m.id === id; });
       if (a === 'ok' || a === 'no') {
         var st = a === 'ok' ? 'approved' : 'rejected';
-        St.Msgs.all().some(function (m) { return m.id === id; }) ? St.Msgs.setStatus(id, st) : St.Photos.setStatus(id, st);
-        U.toast(st === 'approved' ? '已通过，已对外展示' : '已驳回，不对外展示');
-        paint();
+        (isMsg ? St.Msgs.setStatus(id, st) : St.Photos.setStatus(id, st)).then(function () {
+          U.toast(st === 'approved' ? '已通过，已对外展示' : '已驳回，不对外展示');
+          paint();
+        });
       } else if (a === 'del') {
         if (!confirm('确定删除？删除后不可恢复。')) return;
-        St.Msgs.all().some(function (m) { return m.id === id; }) ? St.Msgs.remove(id) : St.Photos.remove(id);
-        U.toast('已删除'); paint();
+        (isMsg ? St.Msgs.remove(id) : St.Photos.remove(id)).then(function () {
+          U.toast('已删除'); paint();
+        });
       } else if (a === 'ban') {
-        St.Users.toggleBan(id); U.toast('已更新账号状态'); paint();
+        St.Users.toggleBan(id).then(function () { U.toast('已更新账号状态'); paint(); });
       } else if (a === 'udel') {
         if (!confirm('删除该账号？其留言不会一并删除。')) return;
-        St.Users.remove(id); U.toast('已删除账号'); paint();
+        St.Users.remove(id).then(function () { U.toast('已删除账号'); paint(); });
       } else if (a === 'unclaim') {
         if (!confirm('解除该名录的认领关系？对方的联系方式将不再展示。')) return;
-        var all = St.Members.all();
-        all.forEach(function (m) { if (m.id === id) { m.ownerId = ''; m.phone = ''; m.addr = ''; m.showPhone = false; m.showAddr = false; } });
-        St.write(St.KEY.members, all); U.toast('已解除认领'); paint();
+        St.Members.unclaim(id).then(function () { U.toast('已解除认领'); paint(); });
       } else if (a === 'export') {
-        var blob = new Blob([JSON.stringify(St.backup(), null, 2)], { type: 'application/json' });
-        var url = URL.createObjectURL(blob);
         var d = new Date(), p = function (n) { return (n < 10 ? '0' : '') + n; };
-        var el = document.createElement('a');
-        el.href = url;
-        el.download = '同学录数据备份_' + d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) + '.json';
-        el.click();
-        setTimeout(function () { URL.revokeObjectURL(url); }, 2000);
-        U.toast('备份已导出');
+        var fname = '同学录数据备份_' + d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) + '.json';
+        St.backup().then(function (data) {
+          var blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+          var url = URL.createObjectURL(blob);
+          var el = document.createElement('a');
+          el.href = url; el.download = fname; el.click();
+          setTimeout(function () { URL.revokeObjectURL(url); }, 2000);
+          U.toast('备份已导出');
+        });
       } else if (a === 'import') {
         document.getElementById('impFile').click();
       } else if (a === 'reset') {
         if (!confirm('【危险】将清空所有留言、照片、注册用户，恢复为初始内容。\n确定要继续吗？')) return;
         if (!confirm('请再次确认：此操作不可撤销，建议先导出备份。')) return;
-        St.init(true);
-        U.toast('已恢复初始数据');
-        setTimeout(function () { location.reload(); }, 900);
+        St.resetAll().then(function (r) {
+          U.toast(r && r.ok === false ? ('恢复失败：' + r.msg) : '已恢复初始数据');
+          setTimeout(function () { location.reload(); }, 900);
+        });
       }
     });
 

@@ -33,8 +33,10 @@ const MOBILE = ['index.html', 'roster.html', 'album.html', 'messages.html', 'sto
   for (const [name, url] of PAGES) {
     const page = await browser.newPage();
     const errs = [], warns = [];
+    // 静态托管时浏览器请求 /api/ping 必然 404，这是双模式设计的正常探测行为，不算错误
+    const EXPECTED = /api\/ping|Failed to load resource.*404/;
     page.on('console', m => {
-      if (m.type() === 'error') errs.push('[console] ' + m.text());
+      if (m.type() === 'error' && !EXPECTED.test(m.text())) errs.push('[console] ' + m.text());
       if (m.type() === 'warning') warns.push(m.text());
     });
     page.on('pageerror', e => errs.push('[pageerror] ' + e.message));
@@ -44,7 +46,9 @@ const MOBILE = ['index.html', 'roster.html', 'album.html', 'messages.html', 'sto
     });
     await page.setViewport({ width: 1440, height: 1000 });
     await page.goto(BASE + '/' + url, { waitUntil: 'networkidle2', timeout: 30000 });
-    await new Promise(r => setTimeout(r, 700));
+    // body.ready 由 js/ui.js 在页面事件绑定完成后加上，等它比 sleep 更可靠
+    await page.waitForSelector('body.ready', { timeout: 10000 }).catch(() => {});
+    await new Promise(r => setTimeout(r, 400));
 
     const info = await page.evaluate(() => ({
       title: document.title,
@@ -82,11 +86,17 @@ const MOBILE = ['index.html', 'roster.html', 'album.html', 'messages.html', 'sto
     await page.close();
   }
 
-  /* ---------- 功能流程测试：注册 → 认领 → 留言 → 审核 ---------- */
+  /* ---------- 功能流程测试：注册 → 认领 → 留言 → 审核 ----------
+     注意：表单提交在 store.js 改成异步之后不再触发页面跳转，
+     所以这里不能再用 waitForNavigation 等提交结果，改成显式等待。
+     另外必须先 setViewport：不设视口时无头模式下的 mouse 点击会偶发打空。 */
   console.log('\n---- 功能流程测试 ----');
   const p = await browser.newPage();
+  await p.setViewport({ width: 1440, height: 900 });
   p.on('pageerror', e => console.log('  流程报错: ' + e.message));
+  p.on('dialog', async d => { try { await d.accept(); } catch (e) { /* 弹窗已被处理 */ } });
   await p.goto(BASE + '/register.html', { waitUntil: 'networkidle2' });
+  await p.waitForSelector('body.ready', { timeout: 10000 }).catch(() => {});
   await p.type('[name=name]', '测试同学');
   await p.type('[name=enroll]', '1992');
   await p.type('[name=cls]', '钳工七班');
@@ -99,18 +109,25 @@ const MOBILE = ['index.html', 'roster.html', 'album.html', 'messages.html', 'sto
     '  (登录态: ' + await p.evaluate(() => !!window.Store.Auth.cur()) + ')');
 
   await p.goto(BASE + '/messages.html', { waitUntil: 'networkidle2' });
+  await p.waitForSelector('body.ready', { timeout: 10000 }).catch(() => {});
   await p.type('[name=text]', '测试留言：这是自动化测试提交的内容。');
-  await Promise.all([p.waitForNavigation({ waitUntil: 'networkidle2' }).catch(() => {}), p.click('#msgForm button[type=submit]')]);
-  await new Promise(r => setTimeout(r, 500));
+  await p.click('#msgForm button[type=submit]');
+  // 等异步写入完成（按钮从"提交中…"变回原文字即为写完）
+  await p.waitForFunction(
+    () => document.querySelector('#msgForm button[type=submit]').textContent.indexOf('提交中') < 0,
+    { timeout: 8000 }
+  ).catch(() => {});
+  await new Promise(r => setTimeout(r, 400));
   console.log('  提交留言后页面待审核数: ' + await p.evaluate(() => window.Store.Msgs.count().pending));
   console.log('  表单是否已清空: ' + await p.evaluate(() => document.querySelector('[name=text]').value === ''));
 
   await p.goto(BASE + '/messages.html?mine=1', { waitUntil: 'networkidle2' });
+  await p.waitForSelector('body.ready', { timeout: 10000 }).catch(() => {});
   console.log('  我的留言条数: ' + await p.evaluate(() => document.querySelectorAll('.post').length));
 
   // 认领
   await p.goto(BASE + '/roster.html', { waitUntil: 'networkidle2' });
-  p.on('dialog', async d => { await d.accept(); });
+  await p.waitForSelector('body.ready', { timeout: 10000 }).catch(() => {});
   const claimed = await p.evaluate(() => {
     const b = document.querySelector('[data-claim]');
     if (!b) return 'no-button';
@@ -123,10 +140,15 @@ const MOBILE = ['index.html', 'roster.html', 'album.html', 'messages.html', 'sto
   // 管理后台审核
   await p.evaluate(() => window.Store.Auth.logout());
   await p.goto(BASE + '/login.html', { waitUntil: 'networkidle2' });
+  await p.waitForSelector('body.ready', { timeout: 10000 }).catch(() => {});
   if (await p.$('#loginForm')) {
     await p.type('[name=user]', 'admin');
     await p.type('[name=pass]', 'admin888');
-    await Promise.all([p.waitForNavigation({ waitUntil: 'networkidle2' }), p.click('#loginForm button[type=submit]')]);
+    // 登录成功后 pages.js 会延迟 600ms 跳转；超时兜底，避免整个脚本被 30s 卡死
+    await Promise.all([
+      p.waitForNavigation({ waitUntil: 'networkidle2', timeout: 12000 }).catch(() => {}),
+      p.click('#loginForm button[type=submit]')
+    ]);
   }
   console.log('  管理员登录: ' + p.url().split('/').pop() +
     '  isAdmin=' + await p.evaluate(() => window.Store.Auth.isAdmin()));

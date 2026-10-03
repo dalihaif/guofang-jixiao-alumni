@@ -2,6 +2,12 @@
 tools/shots/
 tools/.cache/
 
+# 后端运行时数据（数据库 + 上传的照片，属于"站内数据"，不进代码仓库）
+server/data/
+server/uploads/
+server/__pycache__/
+*.pyc
+
 # 系统 / 编辑器
 .DS_Store
 Thumbs.db
