@@ -1,12 +1,15 @@
 /* 后台管理功能自检：登录管理员 → 逐页签渲染 → 增/改/查/批量 全流程
-   用法：先起服务（本地静态或 Flask 后端），再 node tools/check-admin.js [端口] */
+   用法：先起服务（本地静态或 Flask 后端），再 node tools/check-admin.js [端口|完整地址]
+   例：node tools/check-admin.js 8099
+       node tools/check-admin.js 5051（Flask 后端）
+       node tools/check-admin.js https://dalihaif.github.io/guofang-jixiao-alumni（线上） */
 const puppeteer = require('puppeteer-core');
 const fs = require('fs');
 const path = require('path');
 
 const CHROME = 'C:/Users/Administrator/AppData/Local/ms-playwright/chromium-1223/chrome-win64/chrome.exe';
-const PORT = process.argv[2] || 8099;
-const BASE = 'http://127.0.0.1:' + PORT;
+const ARG = process.argv[2] || '8099';
+const BASE = /^https?:\/\//.test(ARG) ? ARG.replace(/\/+$/, '') : 'http://127.0.0.1:' + ARG;
 const OUT = path.join(__dirname, 'shots');
 fs.mkdirSync(OUT, { recursive: true });
 
