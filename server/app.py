@@ -82,6 +82,9 @@ CREATE TABLE IF NOT EXISTS photos (
 CREATE TABLE IF NOT EXISTS logs (
   id INTEGER PRIMARY KEY AUTOINCREMENT, time TEXT, who TEXT, action TEXT, detail TEXT
 );
+CREATE TABLE IF NOT EXISTS settings (
+  k TEXT PRIMARY KEY, v TEXT
+);
 CREATE INDEX IF NOT EXISTS idx_msg_status ON messages(status);
 CREATE INDEX IF NOT EXISTS idx_photo_status ON photos(status);
 CREATE INDEX IF NOT EXISTS idx_reply_msg ON replies(msg_id);
@@ -132,6 +135,26 @@ def check_words(t):
         if w in t:
             return w
     return ''
+
+
+# ---------------------------------------------------------------- 站点设置
+# 目前只有一项：是否开放注册（open_register）。关掉之后只有管理员能在后台代注册。
+DEFAULTS = {'open_register': '1'}
+
+
+def get_setting(k, default=''):
+    with db() as c:
+        r = c.execute('SELECT v FROM settings WHERE k=?', (k,)).fetchone()
+    return r['v'] if r else DEFAULTS.get(k, default)
+
+
+def set_setting(k, v):
+    with db() as c:
+        c.execute('INSERT OR REPLACE INTO settings (k,v) VALUES (?,?)', (k, str(v)))
+
+
+def open_register():
+    return get_setting('open_register', '1') == '1'
 
 
 def tok():
@@ -238,7 +261,8 @@ def api_state():
             msgs.append({'id': r['id'], 'author': r['author'], 'cls': r['cls'] or '',
                          'userId': r['user_id'] or '', 'time': r['time'],
                          'status': r['status'], 'text': r['text'], 'replies': reps})
-    return jsonify({'members': members, 'messages': msgs, 'photos': photos, 'users': users})
+    return jsonify({'members': members, 'messages': msgs, 'photos': photos, 'users': users,
+                    'settings': {'openRegister': open_register()}})
 
 
 @app.route('/api/seed', methods=['POST'])
@@ -274,33 +298,55 @@ def api_seed():
 
 
 # ---------------------------------------------------------------- 账号
-@app.route('/api/register', methods=['POST'])
-def api_register():
-    d = request.json or {}
+def _register(d, by_admin=False, operator=None):
+    """注册核心逻辑：普通注册与管理员代注册共用。返回 (响应字典, HTTP 状态码)。"""
     name = (d.get('name') or '').strip()
     user = (d.get('user') or '').strip()
     pwd = d.get('pass') or ''
     if not name or not user or not pwd:
-        return jsonify({'ok': False, 'msg': '姓名、账号、密码都不能为空'})
+        return {'ok': False, 'msg': '姓名、账号、密码都不能为空'}, 400
     if len(pwd) < 6:
-        return jsonify({'ok': False, 'msg': '密码至少 6 位'})
-    if not d.get('cls') or not d.get('enroll'):
-        return jsonify({'ok': False, 'msg': '请填写届别与班级'})
+        return {'ok': False, 'msg': '密码至少 6 位'}, 400
+    enroll = (d.get('enroll') or '').strip()
+    cls = (d.get('cls') or '').strip()
+    if not enroll or not cls:
+        # 代注册时允许省略，用班级默认值兜底
+        if by_admin:
+            enroll, cls = enroll or '1992', cls or '钳工七班'
+        else:
+            return {'ok': False, 'msg': '请填写届别与班级'}, 400
+
     with db() as c:
         if c.execute('SELECT id FROM users WHERE user=?', (user,)).fetchone():
-            return jsonify({'ok': False, 'msg': '该账号已被注册，请换一个'})
+            return {'ok': False, 'msg': '该账号已被注册，请换一个'}, 400
         u = {'id': uid('u'), 'name': name, 'user': user,
-             'pass': generate_password_hash(pwd),          # 注意：pass 是关键字，只能用字典字面量
-             'role': 'user', 'cls': d.get('cls'), 'enroll': d.get('enroll'),
-             'origin': d.get('origin', ''), 'phone': '', 'addr': '',
+             'pass': generate_password_hash(pwd),      # 注意：pass 是关键字，只能用字典字面量
+             'role': (d.get('role') if by_admin and d.get('role') in ('user', 'admin') else 'user'),
+             'cls': cls, 'enroll': enroll,
+             'origin': (d.get('origin') or '').strip()[:30], 'phone': '', 'addr': '',
              'show_phone': 0, 'show_addr': 0,
-             'intro': '', 'avatar': name[-1:], 'created_at': now(),
-             'status': 'active', 'token': tok()}
+             'intro': (d.get('intro') or '')[:200], 'avatar': name[-1:], 'created_at': now(),
+             'status': (d.get('status') if by_admin and d.get('status') in ('active', 'banned') else 'active'),
+             'token': tok()}
         c.execute('INSERT INTO users VALUES ('
                   ':id,:name,:user,:pass,:role,:cls,:enroll,:origin,:phone,:addr,'
                   ':show_phone,:show_addr,:intro,:avatar,:created_at,:status,:token,0)', u)
-    log(name, '注册', '%s 级 %s' % (d.get('enroll'), d.get('cls')))
-    return jsonify({'ok': True, 'user': row2user(_load_user(u['id'])), 'token': u['token']})
+
+    new = row2user(_load_user(u['id']))
+    if by_admin:
+        log(operator or '管理员', '代注册账号', '%s（%s）' % (name, user))
+        # 代注册不返回 token，否则会把管理员自己的登录态顶掉
+        return {'ok': True, 'user': new}, 200
+    log(name, '注册', '%s 级 %s' % (enroll, cls))
+    return {'ok': True, 'user': new, 'token': u['token']}, 200
+
+
+@app.route('/api/register', methods=['POST'])
+def api_register():
+    if not open_register():
+        return jsonify({'ok': False, 'msg': '本站暂未开放注册，请联系管理员开通账号'})
+    r, code = _register(request.json or {}, False)
+    return jsonify(r), code
 
 
 def _load_user(uid_):
@@ -371,14 +417,83 @@ def api_ban(uid_):
 
 @app.route('/api/users/<uid_>', methods=['DELETE'])
 def api_del_user(uid_):
-    if not require_admin():
+    a = require_admin()
+    if not a:
         return jsonify({'ok': False, 'msg': '需要管理员权限'}), 403
     with db() as c:
         r = c.execute('SELECT * FROM users WHERE id=?', (uid_,)).fetchone()
         if not r or r['role'] == 'admin':
             return jsonify({'ok': False, 'msg': '不能删除该账号'})
         c.execute('DELETE FROM users WHERE id=?', (uid_,))
+    log(a['name'], '删除账号', '%s（%s）' % (r['name'], r['user']))
     return jsonify({'ok': True})
+
+
+@app.route('/api/users/<uid_>', methods=['PUT'])
+def api_put_user(uid_):
+    """管理员修改账号资料：姓名、届别、班级、简介、身份、状态。
+    不能改登录账号名（user），避免与认领关系、留言归属对不上。"""
+    a = require_admin()
+    if not a:
+        return jsonify({'ok': False, 'msg': '需要管理员权限'}), 403
+    d = request.json or {}
+    with db() as c:
+        r = c.execute('SELECT * FROM users WHERE id=?', (uid_,)).fetchone()
+        if not r:
+            return jsonify({'ok': False, 'msg': '账号不存在'})
+        # 自我保护：别把自己锁在门外
+        if uid_ == a['id']:
+            if d.get('role') == 'user':
+                return jsonify({'ok': False, 'msg': '不能取消自己的管理员身份'})
+            if d.get('status') == 'banned':
+                return jsonify({'ok': False, 'msg': '不能停用自己的账号'})
+        # 保护最后一个管理员：把别人降级前先确认还剩管理员
+        if r['role'] == 'admin' and d.get('role') == 'user':
+            n = c.execute("SELECT COUNT(*) AS n FROM users WHERE role='admin'").fetchone()['n']
+            if n <= 1:
+                return jsonify({'ok': False, 'msg': '至少要保留一个管理员'})
+
+        name = (d.get('name') or r['name']).strip()[:20] or r['name']
+        role = d.get('role') if d.get('role') in ('user', 'admin') else r['role']
+        status = d.get('status') if d.get('status') in ('active', 'banned') else r['status']
+        c.execute('UPDATE users SET name=?, enroll=?, cls=?, intro=?, role=?, status=? WHERE id=?',
+                  (name,
+                   (d.get('enroll') or r['enroll'] or '').strip()[:10],
+                   (d.get('cls') or r['cls'] or '').strip()[:20],
+                   (d.get('intro') if 'intro' in d else r['intro'] or '')[:200],
+                   role, status, uid_))
+    new = _load_user(uid_)
+    log(a['name'], '修改账号', '%s（%s）' % (new['name'], new['user']))
+    return jsonify({'ok': True, 'user': row2user(new)})
+
+
+@app.route('/api/users/<uid_>/password', methods=['POST'])
+def api_admin_reset_pass(uid_):
+    """管理员重置某人的密码（不需要知道原密码）。"""
+    a = require_admin()
+    if not a:
+        return jsonify({'ok': False, 'msg': '需要管理员权限'}), 403
+    np = (request.json or {}).get('newP') or ''
+    if len(np) < 6:
+        return jsonify({'ok': False, 'msg': '新密码至少 6 位'})
+    with db() as c:
+        r = c.execute('SELECT * FROM users WHERE id=?', (uid_,)).fetchone()
+        if not r:
+            return jsonify({'ok': False, 'msg': '账号不存在'})
+        c.execute('UPDATE users SET pass=?, token=? WHERE id=?',
+                  (generate_password_hash(np), tok(), uid_))
+    log(a['name'], '重置密码', '%s（%s）' % (r['name'], r['user']))
+    return jsonify({'ok': True})
+
+
+@app.route('/api/users', methods=['POST'])
+def api_create_user():
+    """管理员代注册：不受"开放注册"开关限制，可指定身份与初始状态。"""
+    a = require_admin()
+    if not a:
+        return jsonify({'ok': False, 'msg': '需要管理员权限'}), 403
+    r, code = _register(request.json or {}, True, a['name'])
+    return jsonify(r), code
 
 
 # ---------------------------------------------------------------- 名录
@@ -486,6 +601,26 @@ def api_msg_status(mid):
     return jsonify({'ok': True})
 
 
+@app.route('/api/messages/<mid>', methods=['PUT'])
+def api_put_msg(mid):
+    """管理员改留言正文（错别字、隐私信息等就地修改，不退回重发）。"""
+    a = require_admin()
+    if not a:
+        return jsonify({'ok': False, 'msg': '需要管理员权限'}), 403
+    text = ((request.json or {}).get('text') or '').strip()
+    if not text:
+        return jsonify({'ok': False, 'msg': '留言内容不能为空'})
+    if len(text) > 1200:
+        return jsonify({'ok': False, 'msg': '留言最多 1200 字'})
+    with db() as c:
+        r = c.execute('SELECT * FROM messages WHERE id=?', (mid,)).fetchone()
+        if not r:
+            return jsonify({'ok': False, 'msg': '留言不存在'})
+        c.execute('UPDATE messages SET text=? WHERE id=?', (text, mid))
+    log(a['name'], '修改留言', mid)
+    return jsonify({'ok': True})
+
+
 @app.route('/api/messages/<mid>', methods=['DELETE'])
 def api_del_msg(mid):
     u = current_user()
@@ -567,6 +702,31 @@ def api_photo_status(pid):
     return jsonify({'ok': True})
 
 
+@app.route('/api/photos/<pid>', methods=['PUT'])
+def api_put_photo(pid):
+    """管理员改照片信息：标题、分类、年份、说明。"""
+    a = require_admin()
+    if not a:
+        return jsonify({'ok': False, 'msg': '需要管理员权限'}), 403
+    d = request.json or {}
+    with db() as c:
+        r = c.execute('SELECT * FROM photos WHERE id=?', (pid,)).fetchone()
+        if not r:
+            return jsonify({'ok': False, 'msg': '照片不存在'})
+        title = (d.get('title') or r['title'] or '').strip()[:60] or '未命名照片'
+        desc = (d.get('desc') if 'desc' in d else r['descr'] or '')
+        w = check_words(title + ' ' + desc)
+        if w:
+            return jsonify({'ok': False, 'msg': '文字含不适宜词语（%s）' % w})
+        c.execute('UPDATE photos SET title=?, cat=?, year=?, descr=? WHERE id=?',
+                  (title,
+                   d.get('cat') if d.get('cat') in ('class', 'campus', 'group', 'recent') else r['cat'],
+                   (d.get('year') if 'year' in d else r['year'] or '')[:20],
+                   desc[:300], pid))
+    log(a['name'], '修改照片', '%s → %s' % (pid, title))
+    return jsonify({'ok': True})
+
+
 @app.route('/api/photos/<pid>', methods=['DELETE'])
 def api_del_photo(pid):
     u = current_user()
@@ -587,6 +747,57 @@ def api_del_photo(pid):
             pass
     log(u['name'], '删除照片', pid)
     return jsonify({'ok': True})
+
+
+# ---------------------------------------------------------------- 批量操作
+@app.route('/api/moderate', methods=['POST'])
+def api_moderate():
+    """一次处理多条：kind=messages|photos，action=approved|rejected|delete。
+    比前端循环 N 次请求省事，后端也只写一条日志。"""
+    a = require_admin()
+    if not a:
+        return jsonify({'ok': False, 'msg': '需要管理员权限'}), 403
+    d = request.json or {}
+    kind = d.get('kind')
+    action = d.get('action')
+    ids = [x for x in (d.get('ids') or []) if x]
+    table = {'messages': 'messages', 'photos': 'photos'}.get(kind)
+    if not table or not ids or action not in ('approved', 'rejected', 'delete'):
+        return jsonify({'ok': False, 'msg': '参数不正确'})
+    cn = {'messages': '留言', 'photos': '照片'}[kind]
+    n = 0
+    with db() as c:
+        for i in ids:
+            if action == 'delete':
+                if kind == 'messages':
+                    c.execute('DELETE FROM replies WHERE msg_id=?', (i,))
+                else:
+                    r = c.execute('SELECT src FROM photos WHERE id=?', (i,)).fetchone()
+                    if r and r['src'].startswith('/uploads/'):
+                        try:
+                            os.remove(os.path.join(UPLOAD_DIR, os.path.basename(r['src'])))
+                        except OSError:
+                            pass
+                n += c.execute('DELETE FROM %s WHERE id=?' % table, (i,)).rowcount
+            else:
+                n += c.execute('UPDATE %s SET status=? WHERE id=?' % table, (action, i)).rowcount
+    log(a['name'], '批量' + {'approved': '通过', 'rejected': '驳回', 'delete': '删除'}[action],
+        '%s %d 条' % (cn, n))
+    return jsonify({'ok': True, 'n': n})
+
+
+@app.route('/api/settings', methods=['GET', 'POST'])
+def api_settings():
+    if request.method == 'GET':
+        return jsonify({'settings': {'openRegister': open_register()}})
+    a = require_admin()
+    if not a:
+        return jsonify({'ok': False, 'msg': '需要管理员权限'}), 403
+    d = request.json or {}
+    if 'openRegister' in d:
+        set_setting('open_register', '1' if d['openRegister'] else '0')
+        log(a['name'], '修改设置', '开放注册 = %s' % ('开' if d['openRegister'] else '关'))
+    return jsonify({'ok': True, 'settings': {'openRegister': open_register()}})
 
 
 # ---------------------------------------------------------------- 后台杂项

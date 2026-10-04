@@ -28,7 +28,8 @@
     session: 'gdq7_session',
     token:   'gdq7_token',
     posts:   'gdq7_posts',
-    logs:    'gdq7_logs'
+    logs:    'gdq7_logs',
+    settings:'gdq7_settings'
   };
 
   /* ================= 基础读写 ================= */
@@ -81,6 +82,7 @@
       write(KEY.msgs, d.messages || []);
       write(KEY.photos, d.photos || []);
       write(KEY.users, d.users || []);
+      if (d.settings) write(KEY.settings, d.settings);
       write(KEY.inited, true);
       return true;
     });
@@ -118,6 +120,42 @@
       return API.on;
     });
   }
+
+  /* ================= 站点设置 ================= */
+  /* 目前一项：openRegister（是否开放注册）。
+     服务器模式：读后端 settings 表、写 /api/settings；
+     本地模式：存在浏览器里，只对这台电脑生效（本地模式本来就各存各的）。 */
+  var Settings = {
+    all: function () { return read(KEY.settings, { openRegister: true }); },
+    set: function (patch) {
+      if (API.on) {
+        return req('POST', '/settings', patch).then(function () { return pull(); })
+          .then(function () { return { ok: true }; })
+          .catch(function (e) { return { ok: false, msg: e.message }; });
+      }
+      var s = Settings.all();
+      Object.keys(patch).forEach(function (k) { s[k] = patch[k]; });
+      write(KEY.settings, s);
+      addLog('修改设置', '开放注册 = ' + (s.openRegister ? '开' : '关'));
+      return Promise.resolve({ ok: true });
+    }
+  };
+
+  /* ================= 批量审核 ================= */
+  var Moderate = {
+    /* kind: 'messages' | 'photos'；action: 'approved' | 'rejected' | 'delete' */
+    batch: function (kind, ids, action) {
+      ids = (ids || []).filter(Boolean);
+      if (!ids.length) return Promise.resolve({ ok: false, msg: '请先勾选内容' });
+      if (API.on) return mutate('/moderate', { kind: kind, ids: ids, action: action });
+      var M = kind === 'messages' ? Msgs : Photos;
+      return ids.reduce(function (p, id) {
+        return p.then(function () {
+          return action === 'delete' ? M.remove(id) : M.setStatus(id, action);
+        });
+      }, Promise.resolve()).then(function () { return { ok: true, n: ids.length }; });
+    }
+  };
 
   /* ================= 本地初始化（本地模式用） ================= */
   function init(force) {
@@ -173,6 +211,10 @@
     isLogin: function () { return !!Auth.cur(); },
 
     register: function (o) {
+      // 管理员在后台关掉"开放注册"后，普通注册直接拦下（服务器模式后端也会再拦一次）
+      if (!Settings.all().openRegister) {
+        return Promise.resolve({ ok: false, msg: '本站暂未开放注册，请联系管理员开通账号' });
+      }
       if (API.on) {
         return req('POST', '/register', o).then(function (r) {
           if (!r.ok) return r;
@@ -242,6 +284,40 @@
       if (u.pass !== hash(oldP)) return Promise.resolve({ ok: false, msg: '原密码不正确' });
       if (newP.length < 6) return Promise.resolve({ ok: false, msg: '新密码至少 6 位' });
       Users.update(id, { pass: hash(newP) });
+      return Promise.resolve({ ok: true });
+    },
+    /* 管理员代注册（服务器模式走 /api/users，不受"开放注册"开关限制） */
+    create: function (o) {
+      if (API.on) return mutate('/users', o);
+      var users = Users.all();
+      if (!o.name || !o.user || !o.pass) return Promise.resolve({ ok: false, msg: '姓名、账号、密码都不能为空' });
+      if (o.pass.length < 6) return Promise.resolve({ ok: false, msg: '密码至少 6 位' });
+      if (users.some(function (u) { return u.user === o.user; })) {
+        return Promise.resolve({ ok: false, msg: '该账号已被注册，请换一个' });
+      }
+      var nu = {
+        id: uid('u'), name: o.name, user: o.user, pass: hash(o.pass),
+        role: o.role === 'admin' ? 'admin' : 'user',
+        cls: o.cls || '钳工七班', enroll: o.enroll || '1992', origin: o.origin || '',
+        phone: '', addr: '', showPhone: false, showAddr: false,
+        intro: o.intro || '', avatar: o.name.slice(-1), createdAt: now(),
+        status: o.status === 'banned' ? 'banned' : 'active'
+      };
+      users.push(nu); write(KEY.users, users);
+      addLog('代注册账号', o.name + '（' + o.user + '）');
+      return Promise.resolve({ ok: true, user: nu });
+    },
+    /* 管理员重置某人密码：不需要原密码 */
+    adminSetPass: function (id, newP) {
+      if (String(newP || '').length < 6) return Promise.resolve({ ok: false, msg: '新密码至少 6 位' });
+      if (API.on) return mutate('/users/' + id + '/password', { newP: newP });
+      // 注意：必须改"读出来的那一份数组"再整体写回。
+      // Users.get() 每次都从 localStorage 重新解析出新对象，改它不会写回去。
+      var users = Users.all(), hit = null;
+      users.forEach(function (u) { if (u.id === id) { u.pass = hash(newP); hit = u; } });
+      if (!hit) return Promise.resolve({ ok: false, msg: '账号不存在' });
+      write(KEY.users, users);
+      addLog('重置密码', hit.name + '（' + hit.user + '）');
       return Promise.resolve({ ok: true });
     },
     toggleBan: function (id) {
@@ -388,6 +464,17 @@
       addLog('删除留言', id);
       return Promise.resolve({ ok: true });
     },
+    /* 管理员就地修改留言正文（错别字、隐私信息等） */
+    update: function (id, text) {
+      var txt = (text || '').trim();
+      if (!txt) return Promise.resolve({ ok: false, msg: '留言内容不能为空' });
+      if (txt.length > 1200) return Promise.resolve({ ok: false, msg: '留言最多 1200 字' });
+      if (API.on) return mutate('/messages/' + id, { text: txt }, 'PUT');
+      var all = Msgs.all(), hit = false;
+      all.forEach(function (m) { if (m.id === id) { m.text = txt; hit = true; } });
+      if (hit) { write(KEY.msgs, all); addLog('修改留言', id); }
+      return Promise.resolve({ ok: hit });
+    },
     removeReply: function (msgId, repId) {
       if (API.on) return mutate('/messages/' + msgId + '/replies/' + repId, {}, 'DELETE');
       var all = Msgs.all();
@@ -442,6 +529,21 @@
       write(KEY.photos, all); addLog('照片审核', id + ' → ' + status);
       return Promise.resolve({ ok: true });
     },
+    /* 管理员修改照片信息（标题/分类/年份/说明） */
+    update: function (id, patch) {
+      if (API.on) return mutate('/photos/' + id, patch, 'PUT');
+      var all = Photos.all(), hit = false;
+      all.forEach(function (p) {
+        if (p.id !== id) return;
+        if (patch.title !== undefined) p.title = (patch.title || '').trim() || '未命名照片';
+        if (patch.cat !== undefined) p.cat = patch.cat;
+        if (patch.year !== undefined) p.year = patch.year;
+        if (patch.desc !== undefined) p.desc = patch.desc;
+        hit = true;
+      });
+      if (hit) { write(KEY.photos, all); addLog('修改照片', id + ' → ' + (patch.title || '')); }
+      return Promise.resolve({ ok: hit });
+    },
     remove: function (id) {
       if (API.on) return mutate('/photos/' + id, {}, 'DELETE');
       write(KEY.photos, Photos.all().filter(function (p) { return p.id !== id; }));
@@ -488,6 +590,13 @@
   function logs() {
     return read(KEY.logs, []);
   }
+  /* 后台"操作日志"用：服务器模式从后端取（本地模式日志留在各自浏览器里，
+     后端模式下所有人的操作都记在数据库，管理员要看就得问服务器要）。 */
+  function fetchLogs() {
+    if (!API.on) return Promise.resolve(read(KEY.logs, []));
+    return req('GET', '/logs').then(function (d) { return d.logs || []; })
+      .catch(function () { return read(KEY.logs, []); });
+  }
 
   /* ================= 备份 / 恢复 ================= */
   function backup() {
@@ -527,8 +636,9 @@
     KEY: KEY, API: API,
     start: start, init: init, resetAll: resetAll, pull: pull,
     read: read, write: write, uid: uid, now: now, hash: hash,
-    checkWords: checkWords, addLog: addLog, logs: logs,
+    checkWords: checkWords, addLog: addLog, logs: logs, fetchLogs: fetchLogs,
     Auth: Auth, Users: Users, Members: Members, Msgs: Msgs, Photos: Photos,
+    Settings: Settings, Moderate: Moderate,
     backup: backup, restore: restore
   };
 })();

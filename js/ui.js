@@ -157,6 +157,96 @@
       '</footer>';
   }
 
+  /* ------------------------------ 通用弹窗 ------------------------------ */
+  /* 用法：
+       UI.modal({
+         title: '编辑资料',
+         body : '<div class="form-row">…</div>',   // 已转义的 HTML
+         okText: '保存', cancelText: '取消',
+         width: 560,                                // 可选
+         onOk: function (root) {                    // 返回 false 可阻止关闭
+           var v = root.querySelector('[name=x]').value;
+           return doSomething(v).then(...)          // 返回 Promise 时会自动等
+         }
+       });
+     弹窗点确定后由调用方自己刷新页面/重绘表格。 */
+  var MODAL = {
+    el: null,
+    open: function (opt) {
+      var el = MODAL.el;
+      if (!el) {
+        el = document.createElement('div');
+        el.className = 'modal-mask';
+        el.innerHTML =
+          '<div class="modal" role="dialog" aria-modal="true">' +
+            '<div class="modal-head"><h3></h3>' +
+              '<button type="button" class="modal-x" aria-label="关闭">✕</button></div>' +
+            '<div class="modal-body"></div>' +
+            '<div class="modal-foot">' +
+              '<button type="button" class="btn btn-ghost modal-cancel">取消</button>' +
+              '<button type="button" class="btn modal-ok">确定</button>' +
+            '</div>' +
+          '</div>';
+        document.body.appendChild(el);
+        el.querySelector('.modal-x').onclick = MODAL.close;
+        el.querySelector('.modal-cancel').onclick = MODAL.close;
+        el.addEventListener('click', function (e) { if (e.target === el) MODAL.close(); });
+        document.addEventListener('keydown', function (e) {
+          if (e.key === 'Escape' && el.classList.contains('on')) MODAL.close();
+        });
+        MODAL.el = el;
+      }
+      el.querySelector('.modal-head h3').innerHTML = esc(opt.title || '');
+      el.querySelector('.modal-body').innerHTML = opt.body || '';
+      el.querySelector('.modal-ok').textContent = opt.okText || '确定';
+      el.querySelector('.modal-cancel').textContent = opt.cancelText || '取消';
+      var okBtn = el.querySelector('.modal-ok');
+      okBtn.className = 'btn modal-ok' + (opt.danger ? ' btn-danger' : '');
+      el.querySelector('.modal').style.maxWidth = (opt.width || 560) + 'px';
+      el.classList.add('on');
+      document.body.style.overflow = 'hidden';
+
+      // 重新绑定确定按钮（每次打开都换一次回调）
+      var fresh = okBtn.cloneNode(true);
+      okBtn.parentNode.replaceChild(fresh, okBtn);
+      fresh.onclick = function () {
+        if (!opt.onOk) { MODAL.close(); return; }
+        var r = opt.onOk(el.querySelector('.modal-body'), fresh);
+        if (r === false) return;                       // 校验不通过，保持打开
+        if (r && typeof r.then === 'function') {        // 异步：等结果再关
+          fresh.disabled = true; fresh.textContent = '处理中…';
+          r.then(function () {
+            fresh.disabled = false;
+            MODAL.close();
+            if (opt.after) opt.after();
+          });
+          return;
+        }
+        MODAL.close();
+        if (opt.after) opt.after();
+      };
+      /* 弹窗内部的按钮（比如"删除这条回复"）交给调用方处理：
+         它会收到 (动作名, 按钮元素)，用法同页面里的 data-a 事件委托。 */
+      var card = el.querySelector('.modal');
+      card.onclick = opt.onAction ? function (e) {
+        var b = e.target.closest('[data-a]');
+        if (b) opt.onAction(b.getAttribute('data-a'), b, el.querySelector('.modal-body'));
+      } : null;
+
+      var first = el.querySelector('.modal-body input, .modal-body textarea, .modal-body select');
+      if (first && !opt.noFocus) first.focus();
+    },
+    close: function () {
+      var el = MODAL.el;
+      if (el) el.classList.remove('on');
+      document.body.style.overflow = '';
+    }
+  };
+
+  /* 对外只暴露两个用法：UI.modal({...}) 打开、UI.modal.close() 关闭 */
+  function modalApi(opt) { return MODAL.open(opt); }
+  modalApi.close = function () { return MODAL.close(); };
+
   /* ------------------------------ 灯箱（相册用） ------------------------ */
   var LB = {
     list: [], idx: 0,
@@ -251,7 +341,7 @@
   window.UI = {
     esc: esc, rich: rich, initial: initial, toast: toast, qs: qs,
     statusTag: statusTag, debounce: debounce, compressImage: compressImage,
-    lightbox: LB, catName: Photos_catName, NAV: NAV
+    lightbox: LB, catName: Photos_catName, NAV: NAV, modal: modalApi
   };
 
   /* 先探测后端（有则同步数据），再渲染界面 */

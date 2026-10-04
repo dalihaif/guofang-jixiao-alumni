@@ -821,6 +821,17 @@
   /* ======================================================================
      管理后台
      ====================================================================== */
+  /* ======================================================================
+     管理后台
+     ----------------------------------------------------------------------
+     七个页签：留言审核 / 照片审核 / 用户管理 / 名录认领 / 操作日志 /
+              数据备份 / 系统设置
+
+     每个列表都带「搜索 + 状态筛选 + 勾选批量」，并支持：
+       查看（完整内容）/ 修改（正文、资料、照片信息）/ 注册（后台代注册）
+     数据层在 store.js 里，服务器模式走接口、本地模式走浏览器存储，
+     本文件不用区分。
+     ====================================================================== */
   PAGES.admin = function () {
     var box = document.getElementById('adminBox');
     if (!St.Auth.isAdmin()) {
@@ -829,13 +840,85 @@
       return;
     }
 
+    var ME = St.Auth.cur();
+
+    /* ---------------------- 小工具 ---------------------- */
+    var ORD = { pending: 0, approved: 1, rejected: 2 };
+    function byStatusTime(a, b) {
+      return (ORD[a.status] - ORD[b.status]) || (a.time < b.time ? 1 : -1);
+    }
+    function opts(list, sel) {
+      return list.map(function (o) {
+        return '<option value="' + o[0] + '"' + (o[0] === sel ? ' selected' : '') + '>' + o[1] + '</option>';
+      }).join('');
+    }
+    /* 状态下拉：全站统一的三态 */
+    var ST_OPTS = [['', '全部状态'], ['pending', '待审核'], ['approved', '已通过'], ['rejected', '未通过']];
+
+    /* 搜索 + 筛选条件（切换页签时保留） */
+    var F = {
+      msgs:   { q: '', st: '' },
+      photos: { q: '', st: '' },
+      users:  { q: '', st: '' },
+      claim:  { q: '', st: '' },
+      logs:   { q: '', st: '' }
+    };
+    /* 勾选状态（重绘后要还原，所以存 id 集合） */
+    var SEL = { msgs: {}, photos: {}, users: {} };
+    function selIds(k) { return Object.keys(SEL[k]); }
+    function selN(k) { return selIds(k).length; }
+    function clearSel(k) { SEL[k] = {}; }
+
+    /* 筛选条 HTML：搜索框 + 状态下拉 + 右侧按钮 */
+    function bar(kind, extra) {
+      var f = F[kind];
+      var ph = { msgs: '搜留言内容或留言人', photos: '搜标题、说明或上传者',
+                 users: '搜姓名、账号或班级', claim: '搜姓名或班级', logs: '搜操作人或动作' }[kind] || '搜索';
+      var stSel = (kind === 'users')   ? [['', '全部状态'], ['active', '正常'], ['banned', '已停用']]
+                : (kind === 'claim')   ? [['', '全部'], ['owned', '已认领'], ['free', '未认领']]
+                : (kind === 'logs')    ? null
+                : ST_OPTS;
+      return '<div class="admin-bar">' +
+        '<input class="input grow" data-f="' + kind + '-q" placeholder="' + ph + '" value="' + U.esc(f.q) + '">' +
+        (stSel ? '<select class="input" data-f="' + kind + '-st" style="width:130px">' + opts(stSel, f.st) + '</select>' : '') +
+        '<div class="right">' + (extra || '') + '</div>' +
+      '</div>';
+    }
+    /* 批量操作条：有勾选才显示 */
+    function bulkbar(kind, label) {
+      var n = selN(kind);
+      var forUser = kind === 'users';
+      return '<div class="bulkbar' + (n ? '' : ' hide') + '" data-bulk="' + kind + '">' +
+        '已选 <span class="n">' + n + '</span> ' + (label || '条') +
+        '<div class="right">' +
+          (forUser
+            ? '<button class="btn btn-army btn-sm" data-a="bulk" data-k="' + kind + '" data-act="active">批量启用</button> ' +
+              '<button class="btn btn-ghost btn-sm" data-a="bulk" data-k="' + kind + '" data-act="banned">批量停用</button> '
+            : '<button class="btn btn-army btn-sm" data-a="bulk" data-k="' + kind + '" data-act="approved">批量通过</button> ' +
+              '<button class="btn btn-ghost btn-sm" data-a="bulk" data-k="' + kind + '" data-act="rejected">批量驳回</button> ') +
+          '<button class="btn btn-danger btn-sm" data-a="bulk" data-k="' + kind + '" data-act="delete">批量删除</button> ' +
+          '<button class="btn btn-ghost btn-sm" data-a="bulkclear" data-k="' + kind + '">清空选择</button>' +
+        '</div></div>';
+    }
+    function chk(kind, id) {
+      return '<input type="checkbox" data-a="pick" data-k="' + kind + '" data-id="' + id + '"' +
+        (SEL[kind][id] ? ' checked' : '') + ' aria-label="选择">';
+    }
+    function match(kind, hay) {
+      var q = F[kind].q.trim();
+      return !q || String(hay || '').indexOf(q) >= 0;
+    }
+    /* 顶部统计：点一下跳到对应页签 */
     function stat() {
       var mc = St.Msgs.count(), pc = St.Photos.count();
+      var us = St.Users.all();
+      var banned = us.filter(function (u) { return u.status === 'banned'; }).length;
       return '<div class="stat-row">' +
-        '<div class="stat-box"><div class="n">' + mc.pending + '</div><div class="t">待审核留言</div></div>' +
-        '<div class="stat-box"><div class="n">' + pc.pending + '</div><div class="t">待审核照片</div></div>' +
+        '<div class="stat-box" data-goto="msgs" style="cursor:pointer"><div class="n">' + mc.pending + '</div><div class="t">待审核留言</div></div>' +
+        '<div class="stat-box" data-goto="photos" style="cursor:pointer"><div class="n">' + pc.pending + '</div><div class="t">待审核照片</div></div>' +
         '<div class="stat-box"><div class="n">' + mc.approved + '</div><div class="t">已公开留言</div></div>' +
-        '<div class="stat-box"><div class="n">' + St.Users.all().length + '</div><div class="t">注册账号</div></div>' +
+        '<div class="stat-box" data-goto="users" style="cursor:pointer"><div class="n">' + us.length + '</div>' +
+        '<div class="t">注册账号' + (banned ? '（停用 ' + banned + '）' : '') + '</div></div>' +
       '</div>';
     }
 
@@ -853,102 +936,158 @@
         }).join('') +
       '</div><div data-slot="panel"></div>';
 
+    /* 重绘：会重建搜索框，所以要把焦点和光标位置还回去，否则输入时会跳 */
     function paint() {
+      var ae = document.activeElement;
+      var fk = ae && ae.getAttribute ? ae.getAttribute('data-f') : null;
+      var pos = ae && ae.selectionStart != null ? ae.selectionStart : null;
       box.querySelector('[data-slot=stat]').innerHTML = stat();
       box.querySelector('[data-slot=panel]').innerHTML = panes[cur]();
-      if (paintAfter[cur]) paintAfter[cur]();
+      if (after[cur]) after[cur]();
+      if (fk) {
+        var el = box.querySelector('[data-f="' + fk + '"]');
+        if (el) {
+          el.focus();
+          if (pos != null && el.setSelectionRange) { try { el.setSelectionRange(pos, pos); } catch (e) {} }
+        }
+      }
     }
 
+    /* ---------------------- 各页签 ---------------------- */
     var panes = {
       msgs: function () {
-        var list = St.Msgs.all().sort(function (a, b) {
-          var o = { pending: 0, approved: 1, rejected: 2 };
-          return (o[a.status] - o[b.status]) || (a.time < b.time ? 1 : -1);
-        });
-        if (!list.length) return '<div class="empty">暂无留言</div>';
-        return '<table class="table"><thead><tr><th style="width:78px">状态</th><th>内容</th>' +
-          '<th style="width:110px">留言人</th><th style="width:130px">时间</th><th style="width:190px">操作</th></tr></thead><tbody>' +
+        var list = St.Msgs.all().filter(function (m) {
+          if (F.msgs.st && m.status !== F.msgs.st) return false;
+          return match('msgs', m.text + ' ' + m.author + ' ' + (m.cls || ''));
+        }).sort(byStatusTime);
+        var html = bar('msgs') + bulkbar('msgs', '条留言');
+        if (!list.length) return html + '<div class="empty">没有符合条件的留言</div>';
+        return html + '<div class="table-wrap"><table class="table"><thead><tr>' +
+          '<th class="td-chk">' + chk('msgs', '__all') + '</th>' +
+          '<th style="width:96px">状态</th><th>内容</th>' +
+          '<th style="width:120px">留言人</th><th style="width:132px">时间</th>' +
+          '<th class="act" style="width:230px">操作</th></tr></thead><tbody>' +
           list.map(function (m) {
-            return '<tr><td>' + U.statusTag(m.status) + '</td>' +
-              '<td><div style="max-width:520px;white-space:pre-wrap">' + U.esc(m.text).slice(0, 200) + '</div>' +
-                (m.replies && m.replies.length ? '<div style="font-size:12px;color:var(--ink-3);margin-top:4px">' +
-                  m.replies.length + ' 条回复</div>' : '') + '</td>' +
-              '<td>' + U.esc(m.author) + '<div style="font-size:12px;color:var(--ink-3)">' + U.esc(m.cls || '') + '</div></td>' +
-              '<td style="font-size:12.5px;color:var(--ink-3)">' + U.esc(m.time) + '</td>' +
-              '<td>' +
+            return '<tr><td class="td-chk">' + chk('msgs', m.id) + '</td>' +
+              '<td>' + U.statusTag(m.status) + '</td>' +
+              '<td><div style="max-width:480px">' + U.esc(m.text).slice(0, 120) +
+                (m.text.length > 120 ? '…' : '') + '</div>' +
+                (m.replies && m.replies.length ? '<div class="row-detail">' + m.replies.length + ' 条回复</div>' : '') + '</td>' +
+              '<td>' + U.esc(m.author) + '<div class="row-detail">' + U.esc(m.cls || '') + '</div></td>' +
+              '<td class="row-detail">' + U.esc(m.time) + '</td>' +
+              '<td class="act">' +
+                '<button class="btn btn-sm" data-a="view" data-id="' + m.id + '">查看</button> ' +
+                '<button class="btn btn-ghost btn-sm" data-a="edit" data-id="' + m.id + '">修改</button> ' +
                 (m.status !== 'approved' ? '<button class="btn btn-army btn-sm" data-a="ok" data-id="' + m.id + '">通过</button> ' : '') +
                 (m.status !== 'rejected' ? '<button class="btn btn-ghost btn-sm" data-a="no" data-id="' + m.id + '">驳回</button> ' : '') +
                 '<button class="btn btn-danger btn-sm" data-a="del" data-id="' + m.id + '">删除</button>' +
               '</td></tr>';
-          }).join('') + '</tbody></table>';
+          }).join('') + '</tbody></table></div>';
       },
+
       photos: function () {
-        var list = St.Photos.all().sort(function (a, b) {
-          var o = { pending: 0, approved: 1, rejected: 2 };
-          return (o[a.status] - o[b.status]) || (a.time < b.time ? 1 : -1);
-        });
-        if (!list.length) return '<div class="empty">暂无照片</div>';
-        return '<table class="table"><thead><tr><th style="width:110px">图片</th><th>标题 / 说明</th>' +
-          '<th style="width:100px">上传者</th><th style="width:78px">状态</th><th style="width:190px">操作</th></tr></thead><tbody>' +
+        var list = St.Photos.all().filter(function (p) {
+          if (F.photos.st && p.status !== F.photos.st) return false;
+          return match('photos', p.title + ' ' + (p.desc || '') + ' ' + p.uploader + ' ' + (p.year || ''));
+        }).sort(byStatusTime);
+        var html = bar('photos') + bulkbar('photos', '张照片');
+        if (!list.length) return html + '<div class="empty">没有符合条件的照片</div>';
+        return html + '<div class="table-wrap"><table class="table"><thead><tr>' +
+          '<th class="td-chk">' + chk('photos', '__all') + '</th>' +
+          '<th style="width:104px">图片</th><th>标题 / 说明</th>' +
+          '<th style="width:110px">上传者</th><th style="width:96px">状态</th>' +
+          '<th class="act" style="width:230px">操作</th></tr></thead><tbody>' +
           list.map(function (p) {
-            return '<tr><td><img src="' + p.src + '" style="width:96px;height:72px;object-fit:cover;border-radius:3px"></td>' +
+            return '<tr><td class="td-chk">' + chk('photos', p.id) + '</td>' +
+              '<td><img src="' + p.src + '" alt="" style="width:88px;height:66px;object-fit:cover;' +
+                'object-position:center 36%;border-radius:3px;cursor:zoom-in" data-a="zoom" data-id="' + p.id + '"></td>' +
               '<td><div style="font-weight:600">' + U.esc(p.title) + '</div>' +
-                '<div style="font-size:12.5px;color:var(--ink-3)">' + U.esc(St.Photos.catName(p.cat)) +
-                (p.year ? '　' + U.esc(p.year) : '') + '</div>' +
-                (p.desc ? '<div style="font-size:12.5px;color:var(--ink-2);margin-top:3px">' + U.esc(p.desc).slice(0, 90) + '</div>' : '') + '</td>' +
-              '<td>' + U.esc(p.uploader) + '<div style="font-size:12px;color:var(--ink-3)">' + U.esc(p.time) + '</div></td>' +
+                '<div class="row-detail">' + U.esc(St.Photos.catName(p.cat)) +
+                (p.year ? '　·　' + U.esc(p.year) : '') + (p.builtin ? '　·　初始照片' : '') + '</div>' +
+                (p.desc ? '<div class="row-detail">' + U.esc(p.desc).slice(0, 80) + '</div>' : '') + '</td>' +
+              '<td>' + U.esc(p.uploader) + '<div class="row-detail">' + U.esc(p.time) + '</div></td>' +
               '<td>' + U.statusTag(p.status) + '</td>' +
-              '<td>' +
+              '<td class="act">' +
+                '<button class="btn btn-sm" data-a="viewp" data-id="' + p.id + '">看大图</button> ' +
+                '<button class="btn btn-ghost btn-sm" data-a="editp" data-id="' + p.id + '">修改</button> ' +
                 (p.status !== 'approved' ? '<button class="btn btn-army btn-sm" data-a="ok" data-id="' + p.id + '">通过</button> ' : '') +
                 (p.status !== 'rejected' ? '<button class="btn btn-ghost btn-sm" data-a="no" data-id="' + p.id + '">驳回</button> ' : '') +
                 '<button class="btn btn-danger btn-sm" data-a="del" data-id="' + p.id + '">删除</button>' +
               '</td></tr>';
-          }).join('') + '</tbody></table>';
+          }).join('') + '</tbody></table></div>';
       },
+
       users: function () {
-        var list = St.Users.all();
-        return '<table class="table"><thead><tr><th>姓名</th><th>账号</th><th>届别/班级</th>' +
-          '<th>身份</th><th>状态</th><th>注册时间</th><th style="width:170px">操作</th></tr></thead><tbody>' +
+        var list = St.Users.all().filter(function (u) {
+          if (F.users.st && u.status !== F.users.st) return false;
+          return match('users', u.name + ' ' + u.user + ' ' + (u.cls || '') + ' ' + (u.enroll || ''));
+        });
+        var html = bar('users',
+          '<button class="btn btn-sm" data-a="newuser">＋ 新增账号</button>') +
+          bulkbar('users', '个账号');
+        if (!list.length) return html + '<div class="empty">没有符合条件的账号</div>';
+        return html + '<div class="table-wrap"><table class="table"><thead><tr>' +
+          '<th class="td-chk">' + chk('users', '__all') + '</th>' +
+          '<th>姓名</th><th>登录账号</th><th>届别 / 班级</th>' +
+          '<th style="width:90px">身份</th><th style="width:86px">状态</th>' +
+          '<th style="width:130px">注册时间</th><th class="act" style="width:250px">操作</th>' +
+          '</tr></thead><tbody>' +
           list.map(function (u) {
-            return '<tr><td>' + U.esc(u.name) + '</td><td>' + U.esc(u.user) + '</td>' +
+            var isMe = u.id === ME.id;
+            return '<tr><td class="td-chk">' + (isMe ? '' : chk('users', u.id)) + '</td>' +
+              '<td>' + U.esc(u.name) + (isMe ? ' <span class="row-detail">（我）</span>' : '') + '</td>' +
+              '<td>' + U.esc(u.user) + '</td>' +
               '<td>' + U.esc(u.enroll) + ' 级 ' + U.esc(u.cls) + '</td>' +
               '<td>' + (u.role === 'admin' ? '<span class="tag tag-navy">管理员</span>' : '普通用户') + '</td>' +
               '<td>' + (u.status === 'banned' ? '<span class="tag tag-danger">已停用</span>' : '<span class="tag tag-ok">正常</span>') + '</td>' +
-              '<td style="font-size:12.5px;color:var(--ink-3)">' + U.esc(u.createdAt) + '</td>' +
-              '<td>' + (u.role === 'admin' ? '<span style="font-size:12.5px;color:var(--ink-3)">—</span>' :
-                '<button class="btn btn-ghost btn-sm" data-a="ban" data-id="' + u.id + '">' +
-                  (u.status === 'banned' ? '启用' : '停用') + '</button> ' +
-                '<button class="btn btn-danger btn-sm" data-a="udel" data-id="' + u.id + '">删除</button>') + '</td></tr>';
-          }).join('') + '</tbody></table>';
+              '<td class="row-detail">' + U.esc(u.createdAt) + '</td>' +
+              '<td class="act">' +
+                '<button class="btn btn-sm" data-a="editu" data-id="' + u.id + '">编辑</button> ' +
+                '<button class="btn btn-ghost btn-sm" data-a="passu" data-id="' + u.id + '">重置密码</button> ' +
+                (isMe ? '' : (u.role === 'admin' ? '' :
+                  '<button class="btn btn-ghost btn-sm" data-a="ban" data-id="' + u.id + '">' +
+                    (u.status === 'banned' ? '启用' : '停用') + '</button> ') +
+                  '<button class="btn btn-danger btn-sm" data-a="udel" data-id="' + u.id + '">删除</button>') +
+                (isMe ? '<span class="row-detail">自己的账号只能改资料和改密码</span>' : '') +
+              '</td></tr>';
+          }).join('') + '</tbody></table></div>';
       },
+
       claim: function () {
         var ms = St.Members.all();
         var owned = ms.filter(function (m) { return m.ownerId; });
+        var list = ms.filter(function (m) {
+          if (F.claim.st === 'owned' && !m.ownerId) return false;
+          if (F.claim.st === 'free' && m.ownerId) return false;
+          return match('claim', m.name + ' ' + (m.nick || '') + ' ' + (m.cls || '') + ' ' + (m.origin || ''));
+        });
         return '<div class="notice">名录共 <strong>' + ms.length + '</strong> 条，已被认领 <strong>' + owned.length + '</strong> 条。' +
-          '认领信息由同学本人在名录页操作，联系方式是否公开也由本人决定，管理员无法代为查看未公开的内容。</div>' +
-          '<div style="height:16px"></div>' +
-          '<table class="table"><thead><tr><th>姓名</th><th>届别/班级</th><th>认领账号</th>' +
-          '<th>手机号公开</th><th>地址公开</th><th style="width:110px">操作</th></tr></thead><tbody>' +
-          ms.map(function (m) {
-            var ow = m.ownerId ? St.Users.get(m.ownerId) : null;
-            return '<tr><td>' + U.esc(m.name) + '</td><td>' + U.esc(m.enroll) + ' 级 ' + U.esc(m.cls) + '</td>' +
-              '<td>' + (ow ? U.esc(ow.name) + '（' + U.esc(ow.user) + '）' : '<span style="color:var(--ink-3)">未认领</span>') + '</td>' +
-              '<td>' + (m.showPhone ? '<span class="tag tag-ok">已公开</span>' : '<span class="tag">不公开</span>') + '</td>' +
-              '<td>' + (m.showAddr ? '<span class="tag tag-ok">已公开</span>' : '<span class="tag">不公开</span>') + '</td>' +
-              '<td>' + (m.ownerId ? '<button class="btn btn-ghost btn-sm" data-a="unclaim" data-id="' + m.id + '">解除认领</button>' : '—') + '</td></tr>';
-          }).join('') + '</tbody></table>';
+            '认领由同学本人在名录页操作；联系方式是否公开也由本人决定，管理员<strong>看不到</strong>未公开的内容，' +
+            '只能解除认领关系。</div>' +
+          '<div style="height:14px"></div>' +
+          bar('claim') +
+          (list.length ? '<div class="table-wrap"><table class="table"><thead><tr><th>姓名</th><th>届别 / 班级</th>' +
+            '<th>认领账号</th><th style="width:100px">手机号</th><th style="width:100px">住址</th>' +
+            '<th style="width:110px">操作</th></tr></thead><tbody>' +
+            list.map(function (m) {
+              var ow = m.ownerId ? St.Users.get(m.ownerId) : null;
+              return '<tr><td>' + U.esc(m.name) + (m.nick ? '<div class="row-detail">' + U.esc(m.nick) + '</div>' : '') + '</td>' +
+                '<td>' + U.esc(m.enroll) + ' 级 ' + U.esc(m.cls) + '</td>' +
+                '<td>' + (ow ? U.esc(ow.name) + '（' + U.esc(ow.user) + '）' : '<span style="color:var(--ink-3)">未认领</span>') + '</td>' +
+                '<td>' + (m.showPhone ? '<span class="tag tag-ok">已公开</span>' : '<span class="tag">不公开</span>') + '</td>' +
+                '<td>' + (m.showAddr ? '<span class="tag tag-ok">已公开</span>' : '<span class="tag">不公开</span>') + '</td>' +
+                '<td>' + (m.ownerId ? '<button class="btn btn-ghost btn-sm" data-a="unclaim" data-id="' + m.id + '">解除认领</button>' : '—') + '</td></tr>';
+            }).join('') + '</tbody></table></div>'
+            : '<div class="empty">没有符合条件的名录</div>');
       },
+
+      /* 日志在服务器模式下要从后端现取，所以这里先占位，
+         paint() 之后由 after.logs 拉到数据再填进去 */
       logs: function () {
-        var ls = St.logs();
-        if (!ls.length) return '<div class="empty">暂无记录</div>';
-        return '<table class="table"><thead><tr><th style="width:150px">时间</th><th style="width:110px">操作人</th>' +
-          '<th style="width:130px">动作</th><th>详情</th></tr></thead><tbody>' +
-          ls.map(function (l) {
-            return '<tr><td style="font-size:12.5px;color:var(--ink-3)">' + U.esc(l.time) + '</td>' +
-              '<td>' + U.esc(l.who) + '</td><td>' + U.esc(l.action) + '</td>' +
-              '<td style="font-size:13px;color:var(--ink-2)">' + U.esc(l.detail) + '</td></tr>';
-          }).join('') + '</tbody></table>';
+        return bar('logs') +
+          '<div data-logbox><div class="empty">正在读取操作日志…</div></div>';
       },
+
       data: function () {
         var d = new Date(), p = function (n) { return (n < 10 ? '0' : '') + n; };
         var fn = '同学录数据备份_' + d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) + '.json';
@@ -971,67 +1110,414 @@
           '<button class="btn btn-danger" data-a="reset">恢复初始数据（危险）</button>' +
           '<div class="form-hint" style="margin-top:16px">备份文件名建议：' + U.esc(fn) + '</div>';
       },
+
       sys: function () {
-        var pc = St.Photos.count();
+        var pc = St.Photos.count(), mc = St.Msgs.count();
         var mode = St.API.on
           ? '<span class="tag tag-ok">服务器模式</span>　数据保存在 Flask + SQLite 后端，' +
             '所有同学共享同一份留言与照片。数据库文件：<code>server/data/alumni.db</code>'
           : '<span class="tag tag-warn">本地模式</span>　未检测到后端，数据保存在' +
             '<strong>各自浏览器</strong>的本地存储里，同学之间看不到彼此的新留言与新照片。' +
             '想共享数据请运行 <code>python server/app.py</code>。';
+        var open = St.Settings.all().openRegister;
         return '<div class="prose-block">' +
+          '<h3 style="margin-top:0">账号与注册</h3>' +
+          '<div class="admin-bar" style="margin-bottom:14px">' +
+            '<span style="font-size:14px">开放同学自助注册</span>' +
+            '<span class="hint">' + (open ? '任何人都能注册账号，注册后即可留言、上传照片（内容仍需审核）'
+                                         : '已关闭：新账号只能由管理员在「用户管理 → 新增账号」里开通') + '</span>' +
+            '<div class="right">' +
+              '<button class="btn btn-sm ' + (open ? 'btn-ghost' : 'btn-army') + '" data-a="togreg">' +
+                (open ? '改为关闭' : '改为开放') + '</button>' +
+            '</div>' +
+          '</div>' +
+          '<p class="noind"><button class="btn btn-ghost btn-sm" data-a="mypass">修改我的登录密码</button>' +
+            '　<span class="row-detail">当前登录：' + U.esc(ME.name) + '（' + U.esc(ME.user) + '）</span></p>' +
+
           '<h3>运行模式</h3>' +
           '<p class="noind">' + mode + '</p>' +
+          '<h3>内容概况</h3>' +
+          '<ul><li>名录：' + St.Members.all().length + ' 条（同学 ' + St.Members.students().length +
+            ' 人、师长 ' + St.Members.teachers().length + ' 位）</li>' +
+          '<li>相册：' + pc.total + ' 张（已公开 ' + pc.approved + '，待审核 ' + pc.pending + '）</li>' +
+          '<li>留言：' + mc.total + ' 条（待审核 ' + mc.pending + '）</li>' +
+          '<li>账号：' + St.Users.all().length + ' 个</li></ul>' +
           '<h3>站点信息</h3>' +
           '<p class="noind">站点名称、开篇寄语、导航菜单等，请编辑 <code>js/seed.js</code> 顶部的 <code>window.SITE</code>；' +
           '名录、文章、相册初始内容也在同一个文件里。</p>' +
-          '<h3>内容概况</h3>' +
-          '<ul><li>名录：' + St.Members.all().length + ' 条（其中同学 ' + St.Members.students().length + ' 人、师长 ' + St.Members.teachers().length + ' 位）</li>' +
-          '<li>相册：' + pc.total + ' 张（已公开 ' + pc.approved + '，待审核 ' + pc.pending + '）</li>' +
-          '<li>留言：' + St.Msgs.count().total + ' 条</li>' +
-          '<li>账号：' + St.Users.all().length + ' 个</li></ul>' +
           '<h3>审核说明</h3>' +
           '<p class="noind">同学提交的留言与照片一律进入"待审核"，只有管理员点"通过"后才会对外展示。' +
-          '管理员可随时删除违规内容。建议每周固定查看一次待审核列表。</p>' +
+          '发现错别字或需要脱敏的内容，可以直接点"修改"就地改，不必退回重发。</p>' +
           '<h3>上线方式（任选其一）</h3>' +
           '<ul>' +
             '<li><strong>局域网共享</strong>：把整个文件夹放到内网共享目录，同学直接打开 <code>index.html</code>。</li>' +
             '<li><strong>内网小服务器</strong>：在本目录执行 <code>python -m http.server 8080</code>，' +
               '同学访问 <code>http://你的IP:8080</code>（数据仍各自存在各自浏览器）。</li>' +
+            '<li><strong>后端共享</strong>：运行 <code>python server/app.py</code>，所有人共用同一份数据。</li>' +
             '<li><strong>GitHub Pages</strong>：把文件夹推到仓库并开启 Pages，即可获得公网地址。</li>' +
           '</ul>' +
-          '<p class="noind" style="color:var(--ink-3);font-size:13.5px">『数据轻量化说明』本方案不依赖数据库，' +
-          '每个访问者的数据存在自己的浏览器里。如果需要"所有人看到同一份数据"，' +
-          '请把 <code>js/store.js</code> 的数据层改成调用后端接口（文件内已有注释标出改造位置）。</p>' +
         '</div>';
       }
     };
-    var paintAfter = {};
 
-    paint();
+    /* ---------------------- 弹窗：查看 / 修改 / 新增 ---------------------- */
+    function viewMsg(m) {
+      var reps = (m.replies || []).map(function (r) {
+        return '<div style="border-top:1px dashed var(--line);padding-top:10px;margin-top:10px">' +
+          '<div class="row-detail">' + U.esc(r.author) + '　' + U.esc(r.time) + '</div>' +
+          '<div style="margin-top:4px">' + U.esc(r.text) + '</div>' +
+          '<div style="margin-top:6px"><button class="btn btn-danger btn-sm" data-a="delrep" ' +
+            'data-id="' + m.id + '" data-rid="' + r.id + '">删除这条回复</button></div>' +
+        '</div>';
+      }).join('');
+      U.modal({
+        title: '留言详情',
+        width: 640,
+        noFocus: true,
+        body: '<div class="row-detail" style="margin-bottom:8px">' + U.esc(m.author) +
+            (m.cls ? '　·　' + U.esc(m.cls) : '') + '　·　' + U.esc(m.time) + '　' + U.statusTag(m.status) + '</div>' +
+          '<div class="msg-full">' + U.esc(m.text) + '</div>' +
+          (reps ? '<div style="margin-top:16px"><strong style="font-size:13.5px">回复（' +
+            (m.replies || []).length + '）</strong>' + reps + '</div>' : ''),
+        okText: '关闭',
+        onOk: function () {},
+        /* 弹窗里的"删除回复"由这里接住 */
+        onAction: function (act, btn) {
+          if (act !== 'delrep') return;
+          var rid = btn.getAttribute('data-rid');
+          if (!confirm('删除这条回复？')) return;
+          St.Msgs.removeReply(m.id, rid).then(function () {
+            U.toast('回复已删除');
+            U.modal.close();
+            paint();
+          });
+        }
+      });
+    }
 
-    document.getElementById('adminTabs').addEventListener('click', function (e) {
-      var b = e.target.closest('[data-tab]'); if (!b) return;
-      cur = b.getAttribute('data-tab');
-      box.querySelectorAll('#adminTabs button').forEach(function (x) { x.classList.toggle('on', x === b); });
+    function editMsg(m) {
+      U.modal({
+        title: '修改留言内容',
+        width: 640,
+        body: '<div class="form-row"><label>留言人</label>' +
+            '<input class="input" value="' + U.esc(m.author) + '（' + U.esc(m.cls || '') + '）" disabled></div>' +
+          '<div class="form-row"><label>留言内容 <span class="req">*</span></label>' +
+            '<textarea class="textarea" name="text" style="min-height:170px">' + U.esc(m.text) + '</textarea>' +
+            '<div class="form-hint">最多 1200 字。改完立即生效，不需要重新审核；' +
+            '如果内容需要脱敏（比如写了手机号），直接在这里删掉即可。</div></div>',
+        okText: '保存修改',
+        onOk: function (root) {
+          var t = root.querySelector('[name=text]').value.trim();
+          if (!t) { U.toast('内容不能为空'); return false; }
+          return St.Msgs.update(m.id, t).then(function (r) {
+            if (!r.ok) { U.toast(r.msg || '保存失败'); return; }
+            U.toast('留言已修改'); paint();
+          });
+        }
+      });
+    }
+
+    function editPhoto(p) {
+      U.modal({
+        title: '修改照片信息',
+        width: 600,
+        body: '<div class="form-grid">' +
+          '<div class="form-row full"><label>标题 <span class="req">*</span></label>' +
+            '<input class="input" name="title" value="' + U.esc(p.title) + '"></div>' +
+          '<div class="form-row"><label>分类</label><select class="input" name="cat">' +
+            opts(St.Photos.cats.map(function (c) { return [c.k, c.t]; }), p.cat) + '</select></div>' +
+          '<div class="form-row"><label>年份</label>' +
+            '<input class="input" name="year" value="' + U.esc(p.year || '') + '" placeholder="如 1993"></div>' +
+          '<div class="form-row full"><label>说明</label>' +
+            '<textarea class="textarea" name="desc" style="min-height:90px">' + U.esc(p.desc || '') + '</textarea></div>' +
+          '</div>' +
+          '<div style="margin-top:6px"><img src="' + p.src + '" alt="" ' +
+            'style="width:100%;max-height:180px;object-fit:contain;background:var(--bg-2);border-radius:4px"></div>',
+        okText: '保存修改',
+        onOk: function (root) {
+          var title = root.querySelector('[name=title]').value.trim();
+          if (!title) { U.toast('标题不能为空'); return false; }
+          return St.Photos.update(p.id, {
+            title: title,
+            cat: root.querySelector('[name=cat]').value,
+            year: root.querySelector('[name=year]').value.trim(),
+            desc: root.querySelector('[name=desc]').value.trim()
+          }).then(function (r) {
+            if (!r.ok) { U.toast(r.msg || '保存失败'); return; }
+            U.toast('照片信息已修改'); paint();
+          });
+        }
+      });
+    }
+
+    /* 新增账号（后台代注册）：关掉自助注册时，就靠这里开通 */
+    function newUser() {
+      U.modal({
+        title: '新增账号（管理员代注册）',
+        width: 620,
+        body: '<div class="form-grid">' +
+          '<div class="form-row"><label>姓名 <span class="req">*</span></label>' +
+            '<input class="input" name="name" placeholder="真实姓名"></div>' +
+          '<div class="form-row"><label>登录账号 <span class="req">*</span></label>' +
+            '<input class="input" name="user" placeholder="字母/数字，登录用"></div>' +
+          '<div class="form-row"><label>初始密码 <span class="req">*</span></label>' +
+            '<input class="input" name="pass" type="text" placeholder="至少 6 位"></div>' +
+          '<div class="form-row"><label>身份</label><select class="input" name="role">' +
+            opts([['user', '普通用户'], ['admin', '管理员']], 'user') + '</select></div>' +
+          '<div class="form-row"><label>届别</label>' +
+            '<input class="input" name="enroll" value="1992"></div>' +
+          '<div class="form-row"><label>班级</label>' +
+            '<input class="input" name="cls" value="钳工七班"></div>' +
+          '<div class="form-row"><label>初始状态</label><select class="input" name="status">' +
+            opts([['active', '正常（可登录）'], ['banned', '停用（先占坑）']], 'active') + '</select></div>' +
+          '<div class="form-row full"><label>简介（可不填）</label>' +
+            '<textarea class="textarea" name="intro" style="min-height:70px"></textarea></div>' +
+          '</div>' +
+          '<div class="form-hint">建好之后把账号和初始密码告诉本人，让他登录后自己改密码。' +
+          '管理员可以帮不会操作的同学代建账号。</div>',
+        okText: '创建账号',
+        onOk: function (root) {
+          var v = function (n) { return root.querySelector('[name=' + n + ']').value.trim(); };
+          if (!v('name') || !v('user') || !v('pass')) { U.toast('姓名、账号、密码都要填'); return false; }
+          if (v('pass').length < 6) { U.toast('密码至少 6 位'); return false; }
+          return St.Users.create({
+            name: v('name'), user: v('user'), pass: v('pass'),
+            role: v('role'), enroll: v('enroll'), cls: v('cls'),
+            status: v('status'), intro: v('intro')
+          }).then(function (r) {
+            if (!r.ok) { U.toast(r.msg || '创建失败'); return; }
+            U.toast('账号已创建'); paint();
+          });
+        }
+      });
+    }
+
+    function editUser(u) {
+      U.modal({
+        title: '编辑账号资料',
+        width: 600,
+        body: '<div class="form-grid">' +
+          '<div class="form-row"><label>姓名 <span class="req">*</span></label>' +
+            '<input class="input" name="name" value="' + U.esc(u.name) + '"></div>' +
+          '<div class="form-row"><label>登录账号</label>' +
+            '<input class="input" value="' + U.esc(u.user) + '" disabled></div>' +
+          '<div class="form-row"><label>届别</label>' +
+            '<input class="input" name="enroll" value="' + U.esc(u.enroll || '') + '"></div>' +
+          '<div class="form-row"><label>班级</label>' +
+            '<input class="input" name="cls" value="' + U.esc(u.cls || '') + '"></div>' +
+          '<div class="form-row"><label>身份</label><select class="input" name="role">' +
+            opts([['user', '普通用户'], ['admin', '管理员']], u.role) + '</select></div>' +
+          '<div class="form-row"><label>状态</label><select class="input" name="status">' +
+            opts([['active', '正常'], ['banned', '停用']], u.status) + '</select></div>' +
+          '<div class="form-row full"><label>简介</label>' +
+            '<textarea class="textarea" name="intro" style="min-height:80px">' + U.esc(u.intro || '') + '</textarea></div>' +
+          '</div>' +
+          '<div class="form-hint">登录账号不能改（改了会让认领关系、留言归属对不上）。' +
+          '要改密码请用列表里的"重置密码"。</div>',
+        okText: '保存修改',
+        onOk: function (root) {
+          var v = function (n) { return root.querySelector('[name=' + n + ']').value.trim(); };
+          if (!v('name')) { U.toast('姓名不能为空'); return false; }
+          return St.Users.update(u.id, {
+            name: v('name'), enroll: v('enroll'), cls: v('cls'),
+            role: v('role'), status: v('status'), intro: v('intro')
+          }).then(function (r) {
+            if (!r.ok) { U.toast(r.msg || '保存失败'); return; }
+            U.toast('资料已保存');
+            if (u.id === ME.id && v('role') !== 'admin') { location.href = 'index.html'; return; }
+            paint();
+          });
+        }
+      });
+    }
+
+    function resetPass(u) {
+      U.modal({
+        title: '重置密码 · ' + U.esc(u.name),
+        width: 480,
+        body: '<div class="notice">重设后对方<strong>立即下线</strong>，需要用新密码重新登录。' +
+            '把新密码告诉本人，并提醒他到"我的资料"里改掉。</div>' +
+          '<div style="height:14px"></div>' +
+          '<div class="form-row"><label>新密码 <span class="req">*</span></label>' +
+            '<input class="input" name="p1" type="text" placeholder="至少 6 位"></div>' +
+          '<div class="form-row"><label>再输一次 <span class="req">*</span></label>' +
+            '<input class="input" name="p2" type="text" placeholder="确认新密码"></div>',
+        okText: '重置密码',
+        onOk: function (root) {
+          var p1 = root.querySelector('[name=p1]').value.trim();
+          var p2 = root.querySelector('[name=p2]').value.trim();
+          if (p1.length < 6) { U.toast('密码至少 6 位'); return false; }
+          if (p1 !== p2) { U.toast('两次输入的密码不一致'); return false; }
+          return St.Users.adminSetPass(u.id, p1).then(function (r) {
+            if (!r.ok) { U.toast(r.msg || '重置失败'); return; }
+            U.toast('密码已重置');
+          });
+        }
+      });
+    }
+
+    function myPass() {
+      U.modal({
+        title: '修改我的登录密码',
+        width: 480,
+        body: '<div class="form-row"><label>原密码 <span class="req">*</span></label>' +
+            '<input class="input" name="old" type="password"></div>' +
+          '<div class="form-row"><label>新密码 <span class="req">*</span></label>' +
+            '<input class="input" name="p1" type="password" placeholder="至少 6 位"></div>' +
+          '<div class="form-row"><label>再输一次 <span class="req">*</span></label>' +
+            '<input class="input" name="p2" type="password"></div>' +
+          '<div class="form-hint">初始密码是 admin888，正式使用前务必改掉。</div>',
+        okText: '修改密码',
+        onOk: function (root) {
+          var g = function (n) { return root.querySelector('[name=' + n + ']').value; };
+          if (g('p1').length < 6) { U.toast('新密码至少 6 位'); return false; }
+          if (g('p1') !== g('p2')) { U.toast('两次输入的新密码不一致'); return false; }
+          return St.Users.setPass(ME.id, g('old'), g('p1')).then(function (r) {
+            if (!r.ok) { U.toast(r.msg || '修改失败'); return; }
+            U.toast('密码已修改，下次登录请用新密码');
+          });
+        }
+      });
+    }
+
+    /* ---------------------- 重绘后要补做的事 ---------------------- */
+    function renderLogs(ls) {
+      var list = ls.filter(function (l) {
+        return match('logs', l.who + ' ' + l.action + ' ' + l.detail);
+      });
+      if (!list.length) return '<div class="empty">' +
+        (F.logs.q ? '没有符合条件的记录' : '暂无操作记录') + '</div>';
+      return '<div class="table-wrap"><table class="table"><thead><tr>' +
+        '<th style="width:150px">时间</th><th style="width:110px">操作人</th>' +
+        '<th style="width:130px">动作</th><th>详情</th></tr></thead><tbody>' +
+        list.map(function (l) {
+          return '<tr><td class="row-detail">' + U.esc(l.time) + '</td>' +
+            '<td>' + U.esc(l.who) + '</td><td>' + U.esc(l.action) + '</td>' +
+            '<td style="font-size:13px;color:var(--ink-2)">' + U.esc(l.detail) + '</td></tr>';
+        }).join('') + '</tbody></table></div>';
+    }
+    var after = {
+      logs: function () {
+        var slot = box.querySelector('[data-logbox]');
+        if (!slot) return;
+        St.fetchLogs().then(function (ls) {
+          // 期间可能已经切走 / 重绘过了，检查一下还在不在
+          var cur2 = box.querySelector('[data-logbox]');
+          if (cur2) cur2.innerHTML = renderLogs(ls);
+        });
+      }
+    };
+
+    /* ---------------------- 事件 ---------------------- */
+    function gotoTab(k) {
+      cur = k;
+      box.querySelectorAll('#adminTabs button').forEach(function (x) {
+        x.classList.toggle('on', x.getAttribute('data-tab') === k);
+      });
       paint();
-    });
+    }
 
-    /* 行内操作 */
     box.addEventListener('click', function (e) {
+      /* 点统计块跳页签 */
+      var g = e.target.closest('[data-goto]');
+      if (g) { gotoTab(g.getAttribute('data-goto')); return; }
+
       var b = e.target.closest('[data-a]'); if (!b) return;
       var a = b.getAttribute('data-a'), id = b.getAttribute('data-id');
-      var isMsg = St.Msgs.all().some(function (m) { return m.id === id; });
+      var m = St.Msgs.all().filter(function (x) { return x.id === id; })[0];
+      var p = St.Photos.all().filter(function (x) { return x.id === id; })[0];
+      var u = St.Users.get(id);
+
+      /* ---- 勾选（含表头全选） ---- */
+      if (a === 'pick') {
+        var k = b.getAttribute('data-k');
+        if (id === '__all') {
+          var on = b.checked;
+          // 全选只针对"当前筛选出来的行"
+          box.querySelectorAll('tbody input[data-k="' + k + '"]').forEach(function (x) {
+            x.checked = on;
+            var xid = x.getAttribute('data-id');
+            if (on) SEL[k][xid] = true; else delete SEL[k][xid];
+          });
+        } else {
+          if (b.checked) SEL[k][id] = true; else delete SEL[k][id];
+        }
+        refreshBulk(k);
+        return;
+      }
+      /* ---- 批量 ---- */
+      if (a === 'bulk' || a === 'bulkclear') {
+        var kk = b.getAttribute('data-k');
+        if (a === 'bulkclear') { clearSel(kk); paint(); return; }
+        var ids = selIds(kk);
+        if (!ids.length) { U.toast('请先勾选内容'); return; }
+        var act = b.getAttribute('data-act');
+        var what = kk === 'msgs' ? '留言' : (kk === 'photos' ? '照片' : '账号');
+        if (act === 'delete' && !confirm('确定删除勾选的 ' + ids.length + ' 条' + what + '？删除后不可恢复。')) return;
+        if (kk === 'users') {
+          if (act === 'delete') {
+            if (!confirm('删除账号后，他们发过的留言仍会保留。继续？')) return;
+            ids.reduce(function (chain, x) {
+              return chain.then(function () { return St.Users.remove(x); });
+            }, Promise.resolve()).then(function () { U.toast('已删除 ' + ids.length + ' 个账号'); clearSel(kk); paint(); });
+          } else {
+            var st = act === 'banned' ? 'banned' : 'active';
+            ids.reduce(function (chain, x) {
+              return chain.then(function () { return St.Users.update(x, { status: st }); });
+            }, Promise.resolve()).then(function () {
+              U.toast(st === 'banned' ? '已停用' : '已启用'); clearSel(kk); paint();
+            });
+          }
+          return;
+        }
+        St.Moderate.batch(kk, ids, act).then(function (r) {
+          if (!r.ok) { U.toast(r.msg || '操作失败'); return; }
+          U.toast('已处理 ' + ids.length + ' 条' + what);
+          clearSel(kk); paint();
+        });
+        return;
+      }
+
+      /* ---- 单条 ---- */
       if (a === 'ok' || a === 'no') {
-        var st = a === 'ok' ? 'approved' : 'rejected';
-        (isMsg ? St.Msgs.setStatus(id, st) : St.Photos.setStatus(id, st)).then(function () {
-          U.toast(st === 'approved' ? '已通过，已对外展示' : '已驳回，不对外展示');
+        var stt = a === 'ok' ? 'approved' : 'rejected';
+        (m ? St.Msgs.setStatus(id, stt) : St.Photos.setStatus(id, stt)).then(function () {
+          U.toast(stt === 'approved' ? '已通过，已对外展示' : '已驳回，不对外展示');
           paint();
         });
       } else if (a === 'del') {
         if (!confirm('确定删除？删除后不可恢复。')) return;
-        (isMsg ? St.Msgs.remove(id) : St.Photos.remove(id)).then(function () {
+        (m ? St.Msgs.remove(id) : St.Photos.remove(id)).then(function () {
           U.toast('已删除'); paint();
+        });
+      } else if (a === 'view') {
+        if (m) viewMsg(m);
+      } else if (a === 'edit') {
+        if (m) editMsg(m);
+      } else if (a === 'viewp' || a === 'zoom') {
+        if (p) U.lightbox.open([p], 0);
+      } else if (a === 'editp') {
+        if (p) editPhoto(p);
+      } else if (a === 'newuser') {
+        newUser();
+      } else if (a === 'editu') {
+        if (u) editUser(u);
+      } else if (a === 'passu') {
+        if (u) resetPass(u);
+      } else if (a === 'mypass') {
+        myPass();
+      } else if (a === 'togreg') {
+        var open = !St.Settings.all().openRegister;
+        St.Settings.set({ openRegister: open }).then(function (r) {
+          if (!r.ok) { U.toast(r.msg || '设置失败'); return; }
+          U.toast(open ? '已开放自助注册' : '已关闭自助注册，新账号只能由你开通');
+          paint();
+        });
+      } else if (a === 'delrep') {
+        var rid = b.getAttribute('data-rid');
+        if (!confirm('删除这条回复？')) return;
+        St.Msgs.removeReply(id, rid).then(function () {
+          U.toast('回复已删除'); U.modal.close(); paint();
         });
       } else if (a === 'ban') {
         St.Users.toggleBan(id).then(function () { U.toast('已更新账号状态'); paint(); });
@@ -1042,8 +1528,8 @@
         if (!confirm('解除该名录的认领关系？对方的联系方式将不再展示。')) return;
         St.Members.unclaim(id).then(function () { U.toast('已解除认领'); paint(); });
       } else if (a === 'export') {
-        var d = new Date(), p = function (n) { return (n < 10 ? '0' : '') + n; };
-        var fname = '同学录数据备份_' + d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) + '.json';
+        var d = new Date(), pp = function (n) { return (n < 10 ? '0' : '') + n; };
+        var fname = '同学录数据备份_' + d.getFullYear() + pp(d.getMonth() + 1) + pp(d.getDate()) + '.json';
         St.backup().then(function (data) {
           var blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
           var url = URL.createObjectURL(blob);
@@ -1064,16 +1550,50 @@
       }
     });
 
-    document.addEventListener('change', function (e) {
+    /* 只刷新批量条（勾选时不用整表重绘，避免输入框跳焦） */
+    function refreshBulk(k) {
+      var el = box.querySelector('[data-bulk="' + k + '"]');
+      if (!el) return;
+      var n = selN(k);
+      el.classList.toggle('hide', !n);
+      el.querySelector('.n').textContent = n;
+    }
+
+    /* 页签切换 */
+    document.getElementById('adminTabs').addEventListener('click', function (e) {
+      var b = e.target.closest('[data-tab]'); if (!b) return;
+      gotoTab(b.getAttribute('data-tab'));
+    });
+
+    /* 搜索框：输入停顿 350ms 后重绘；状态下拉：立即重绘 */
+    var onQ = U.debounce(function () { paint(); }, 350);
+    box.addEventListener('input', function (e) {
+      var f = e.target.getAttribute && e.target.getAttribute('data-f');
+      if (!f) return;
+      var parts = f.split('-');
+      if (parts[1] !== 'q') return;
+      F[parts[0]].q = e.target.value;
+      onQ();
+    });
+    box.addEventListener('change', function (e) {
+      var f = e.target.getAttribute && e.target.getAttribute('data-f');
+      if (f) {
+        var parts = f.split('-');
+        F[parts[0]][parts[1]] = e.target.value;
+        paint();
+        return;
+      }
       if (e.target.id !== 'impFile') return;
-      var f = e.target.files[0]; if (!f) return;
+      var file = e.target.files[0]; if (!file) return;
       var fr = new FileReader();
       fr.onload = function () {
         try { St.restore(fr.result); U.toast('数据已导入'); setTimeout(function () { location.reload(); }, 900); }
         catch (err) { alert('导入失败：' + err.message); }
       };
-      fr.readAsText(f);
+      fr.readAsText(file);
     });
+
+    paint();
   };
 
   window.PAGES = PAGES;
