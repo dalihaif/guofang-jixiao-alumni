@@ -106,8 +106,8 @@
               'srcset="assets/img/logo-128.png 1x, assets/img/logo-256.png 2x" ' +
               'width="52" height="52" alt="' + esc(S.className || '国防钳七') + '班徽">' +
             '<span class="brand-text">' +
-              '<span class="brand-title">' + esc(S.name || '同学录') + '</span><br>' +
-              '<span class="brand-sub">' + esc(S.school || '') + ' · ' + esc(S.years || '') + '</span>' +
+              '<span class="brand-title">' + esc(S.name || '校友网') + '</span><br>' +
+              '<span class="brand-sub">' + esc(S.className || '') + ' · ' + esc(S.years || '') + '</span>' +
             '</span>' +
           '</a>' +
           '<button class="nav-toggle" type="button" aria-label="展开菜单">☰ 菜单</button>' +
@@ -126,7 +126,7 @@
             '<div class="footer-brand">' +
               '<img class="footer-logo" src="assets/img/logo-128.png" width="56" height="56" ' +
                 'alt="' + esc(S.className || '国防钳七') + '班徽">' +
-              '<div class="bt">' + esc(S.name || '同学录') + '</div>' +
+              '<div class="bt">' + esc(S.name || '校友网') + '</div>' +
               '<div class="bs">' + esc(S.school || '') + ' · ' + esc(S.className || '') +
                 '（' + esc(S.years || '') + '）</div>' +
               '<div class="bs">' + esc(S.motto || '') + '</div>' +

@@ -16,7 +16,7 @@ copy_one () {
 }
 
 echo
-echo "  ============ 国防技校同学录 · 影音素材导入 ============"
+echo "  ============ 云南省国防技校校友网 · 影音素材导入 ============"
 echo
 copy_one "../国防钳七.mp4" "assets/media/guofang-qianqi.mp4"
 copy_one "../同学.mp4"     "assets/media/tongxue.mp4"

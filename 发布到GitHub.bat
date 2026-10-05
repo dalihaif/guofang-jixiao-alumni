@@ -1,7 +1,7 @@
 @echo off
 chcp 65001 >nul
 rem ===================================================================
-rem  国防技校同学录 · 一键发布到 GitHub Pages
+rem  云南省国防技校校友网 · 一键发布到 GitHub Pages
 rem  用法：
 rem    0. 先提交改动：git add -A  &&  git commit -m "说明"
 rem    1. 双击运行（会提示输入令牌），或命令行：发布到GitHub.bat ghp_你的令牌
@@ -20,7 +20,7 @@ cd /d "%~dp0"
 set TK=%~1
 if "%TK%"=="" (
   echo.
-  echo   ============ 国防技校同学录 · GitHub 发布 ============
+  echo   ============ 云南省国防技校校友网 · GitHub 发布 ============
   echo.
   echo   请到 https://github.com/settings/tokens 生成令牌（勾选 repo 权限）
   echo.

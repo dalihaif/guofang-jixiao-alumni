@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 ==============================================================================
- 国防技校同学录 · 后端服务（Flask + SQLite）
+ 云南省国防技校校友网 · 后端服务（Flask + SQLite）
 ------------------------------------------------------------------------------
  作用：让所有访问者共享同一份留言 / 照片 / 注册用户数据。
 
@@ -862,7 +862,7 @@ def not_found(e):
 
 # ---------------------------------------------------------------- 启动
 def main():
-    ap = argparse.ArgumentParser(description='国防技校同学录 后端服务')
+    ap = argparse.ArgumentParser(description='云南省国防技校校友网 后端服务')
     ap.add_argument('--host', default='127.0.0.1', help='监听地址，局域网用 0.0.0.0')
     ap.add_argument('--port', type=int, default=5000, help='端口，默认 5000')
     ap.add_argument('--debug', action='store_true', help='调试模式（改动自动重启）')
@@ -870,7 +870,7 @@ def main():
 
     init_db()
     print('=' * 62)
-    print('  国防技校同学录 · 后端已启动')
+    print('  云南省国防技校校友网 · 后端已启动')
     print('=' * 62)
     print('  本机访问： http://127.0.0.1:%d' % a.port)
     if a.host == '0.0.0.0':

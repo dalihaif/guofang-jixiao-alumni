@@ -10,7 +10,7 @@ cd /d "%~dp0"
 if not exist "assets\media" mkdir "assets\media"
 
 echo.
-echo   ============ 国防技校同学录 · 影音素材导入 ============
+echo   ============ 云南省国防技校校友网 · 影音素材导入 ============
 echo.
 
 call :copyone "..\国防钳七.mp4"  "assets\media\guofang-qianqi.mp4"

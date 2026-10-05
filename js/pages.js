@@ -1090,7 +1090,7 @@
 
       data: function () {
         var d = new Date(), p = function (n) { return (n < 10 ? '0' : '') + n; };
-        var fn = '同学录数据备份_' + d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) + '.json';
+        var fn = '校友网数据备份_' + d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) + '.json';
         var storeTip = St.API.on
           ? '<div class="notice notice-navy">当前为<strong>服务器模式</strong>，数据统一保存在后端数据库。' +
             '建议每月导出一次备份；更简单的做法是<strong>直接复制 <code>server/data/alumni.db</code> 这个文件</strong>，' +
@@ -1529,7 +1529,7 @@
         St.Members.unclaim(id).then(function () { U.toast('已解除认领'); paint(); });
       } else if (a === 'export') {
         var d = new Date(), pp = function (n) { return (n < 10 ? '0' : '') + n; };
-        var fname = '同学录数据备份_' + d.getFullYear() + pp(d.getMonth() + 1) + pp(d.getDate()) + '.json';
+        var fname = '校友网数据备份_' + d.getFullYear() + pp(d.getMonth() + 1) + pp(d.getDate()) + '.json';
         St.backup().then(function (data) {
           var blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
           var url = URL.createObjectURL(blob);
